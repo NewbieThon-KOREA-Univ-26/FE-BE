@@ -13,10 +13,6 @@ interface Props {
   loading: boolean
 }
 
-/** API 명세서의 요청 예시 좌표. 키 없이도 화면을 바로 눌러볼 수 있게 채워 줍니다. */
-const EXAMPLE_START: Place = { name: '예시 출발지', x: 127.0276, y: 37.4979 }
-const EXAMPLE_END: Place = { name: '예시 도착지', x: 127.03, y: 37.501 }
-
 /** 1. 입력 화면 — 출발지·도착지를 넣고 비교하기를 누릅니다. */
 export function RouteForm({ start, end, onStartChange, onEndChange, onSubmit, loading }: Props) {
   const geo = useCurrentPosition()
@@ -53,7 +49,7 @@ export function RouteForm({ start, end, onStartChange, onEndChange, onSubmit, lo
   const canUseLocation = geo.status !== 'denied' && geo.status !== 'unsupported'
 
   return (
-    <form className="route-form" onSubmit={handleSubmit} noValidate>
+    <form className={`route-form ${loading ? 'is-loading' : ''}`} onSubmit={handleSubmit} noValidate>
       <PlaceSearchInput id="start" label="출발지" value={start} onChange={onStartChange} />
       <PlaceSearchInput id="end" label="도착지" value={end} onChange={onEndChange} />
 
@@ -68,17 +64,6 @@ export function RouteForm({ start, end, onStartChange, onEndChange, onSubmit, lo
             {geo.status === 'loading' ? '위치 확인 중…' : '현재 위치를 출발지로'}
           </button>
         )}
-        <button
-          type="button"
-          className="link"
-          onClick={() => {
-            onStartChange(EXAMPLE_START)
-            onEndChange(EXAMPLE_END)
-            setValidation(null)
-          }}
-        >
-          예시 좌표 채우기
-        </button>
       </div>
 
       {geo.message && <p className="hint">{geo.message}</p>}

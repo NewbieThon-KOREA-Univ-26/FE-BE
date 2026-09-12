@@ -78,7 +78,14 @@ export function MapPanel({ start, end }: Props) {
       map.setLevel(4)
     } else {
       // 왼쪽 검색 패널 아래로 마커가 숨지 않도록 지도 범위에 패널 너비만큼 여백을 둡니다.
-      map.setBounds(bounds, 40, 40, 40, 460)
+      const isMobile = window.matchMedia('(max-width: 860px)').matches
+      map.setBounds(
+        bounds,
+        isMobile ? Math.round(window.innerHeight * 0.55) : 40,
+        isMobile ? 40 : 40,
+        isMobile ? Math.round(window.innerHeight * 0.44) : 40,
+        isMobile ? 40 : 460,
+      )
     }
   }, [start, end, status])
 
