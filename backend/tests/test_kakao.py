@@ -75,8 +75,10 @@ class KakaoTests(unittest.TestCase):
         for request in self.calls:
             self.assertEqual(request.headers['Authorization'], 'KakaoAK kakao-key')
             self.assertEqual(request.url.host, 'dapi.kakao.com')
-            self.assertEqual(request.url.params['sx'], '127.0276')
-            self.assertEqual(request.url.params['ey'], '37.51')
+            self.assertEqual(dict(request.url.params), {
+                'start_x': '127.0276', 'start_y': '37.4979',
+                'end_x': '127.04', 'end_y': '37.51',
+            })
 
     def test_seconds_are_converted_to_minutes(self):
         # 초로 오는 API 도 있어 큰 값은 초로 보고 분으로 바꿉니다.
@@ -242,7 +244,7 @@ class KakaoTests(unittest.TestCase):
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
         message = response.json()['error']['message']
-        self.assertIn('보낸 파라미터: sx, sy, ex, ey', message)
+        self.assertIn('보낸 파라미터: start_x, start_y, end_x, end_y', message)
         self.assertIn('코드 -10', message)
         self.assertIn('origin is required', message)
         self.assertNotIn('kakao-key', message)
@@ -268,7 +270,7 @@ class KakaoTests(unittest.TestCase):
         transit = by_path['/v2/routing/publictraffic']
         self.assertEqual(transit.method, 'POST')
         self.assertEqual(transit.headers['content-type'], 'application/json')
-        self.assertEqual(json.loads(transit.content)['sx'], float(PARAMS['startX']))
+        self.assertEqual(json.loads(transit.content)['start_x'], float(PARAMS['startX']))
         walk = json.loads(by_path['/v2/routing/pedestrian'].content)
         self.assertEqual(walk['origin'], f"{PARAMS['startX']},{PARAMS['startY']}")
         self.assertEqual(str(transit.url.query, 'utf-8'), '')
