@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.config.settings import Settings
 from src.main import create_app
+from tests.test_kakao import error_text
 
 
 PARAMS = dict(startX=127.0276, startY=37.4979, endX=127.04, endY=37.51)
@@ -170,7 +171,7 @@ class CompareTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        self.assertIn('도보 경로 인증', response.json()['error']['message'])
+        self.assertIn('도보 경로 인증', error_text(response.json()))
         self.assertNotIn('test-key', response.text)
 
     def test_timeout(self):

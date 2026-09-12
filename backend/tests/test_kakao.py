@@ -18,6 +18,12 @@ from src.main import create_app
 PARAMS = dict(startX=127.0276, startY=37.4979, endX=127.04, endY=37.51)
 
 
+def error_text(body: dict) -> str:
+    """오류 응답의 사람 문장(message)과 진단(detail)을 합칩니다. 테스트는 둘 중 어디에 있든 확인합니다."""
+    error = body['error']
+    return error['message'] + (' ' + error['detail'] if error.get('detail') else '')
+
+
 def transit_route(minutes=10, fare=1400):
     return {'routes': [{
         'duration': minutes, 'fare': fare, 'transfers': 1,
@@ -122,7 +128,7 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertEqual(response.json()['error']['code'], 'UPSTREAM_ERROR')
         self.assertIn('404', message)
         self.assertIn('도보', message)
@@ -135,7 +141,7 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 404)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertEqual(response.json()['error']['code'], 'NO_ROUTE')
         self.assertIn('-10', message)
         self.assertNotIn('hidden-upstream-text', message)
@@ -145,8 +151,8 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        self.assertIn('JSON', response.json()['error']['message'])
-        self.assertNotIn('html', response.json()['error']['message'])
+        self.assertIn('JSON', error_text(response.json()))
+        self.assertNotIn('html', error_text(response.json()))
 
     def test_walk_failure_says_transit_succeeded(self):
         # 도보만 실패하면 대중교통은 됐다는 사실도 같은 메시지에 담습니다.
@@ -155,7 +161,7 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertIn('404', message)
         self.assertIn('대중교통 조회는 성공', message)
 
@@ -164,7 +170,7 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertIn('404', message)
         self.assertIn('400', message)
         self.assertIn('도보', message)
@@ -222,7 +228,7 @@ class KakaoTests(unittest.TestCase):
         )) as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertIn('developers.kakao.com/docs/latest/ko/kakaomap/rest-api', message)
         self.assertIn('text/html', message)
         self.assertIn('dapi.kakao.com', message)
@@ -231,7 +237,7 @@ class KakaoTests(unittest.TestCase):
     def test_http_error_names_the_requested_path(self):
         self.failure = lambda req: httpx.Response(400)
         with self.client() as client:
-            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+            message = error_text(client.get('/api/compare', params=PARAMS).json())
         self.assertIn('dapi.kakao.com/v2/routing/walk', message)
         self.assertIn('KAKAO_WALK_QUERY', message)
         self.assertNotIn('kakao-key', message)
@@ -244,7 +250,7 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertIn('보낸 파라미터: start_x, start_y, end_x, end_y', message)
         self.assertIn('코드 -10', message)
         self.assertIn('origin is required', message)
@@ -254,7 +260,7 @@ class KakaoTests(unittest.TestCase):
     def test_bad_request_explanation_is_truncated_and_ignores_non_strings(self):
         self.failure = lambda req: httpx.Response(400, json={'msg': 'x' * 500, 'code': {'nested': 1}})
         with self.client() as client:
-            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+            message = error_text(client.get('/api/compare', params=PARAMS).json())
         self.assertNotIn('x' * 161, message)
         self.assertIn('x' * 160, message)
 
@@ -283,7 +289,7 @@ class KakaoTests(unittest.TestCase):
                      kakao_request_style='post-form'),
             httpx.MockTransport(self.handler),
         )) as client:
-            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+            message = error_text(client.get('/api/compare', params=PARAMS).json())
         self.assertEqual(self.calls[0].method, 'POST')
         self.assertIn('application/x-www-form-urlencoded', self.calls[0].headers['content-type'])
         self.assertIn('POST dapi.kakao.com/v2/routing/walk', message)
@@ -294,7 +300,7 @@ class KakaoTests(unittest.TestCase):
                         'routes': [{'summaryInfo': {'elapsed': 1530, 'cost': {'krw': 1500}},
                                     'legs': [{'mode': 'BUS'}]}]}
         with self.client() as client:
-            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+            message = error_text(client.get('/api/compare', params=PARAMS).json())
         self.assertIn('구조:', message)
         for name in ('summaryInfo', 'elapsed: 1530', 'krw: 1500', "mode: 'BUS'", 'totalDistance: 5200'):
             self.assertIn(name, message)
@@ -304,7 +310,7 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 404)
-        message = response.json()['error']['message']
+        message = error_text(response.json())
         self.assertIn('도보', message)
         self.assertIn('routes: [] (0개)', message)
         self.assertIn("message: 'no result'", message)
@@ -391,7 +397,7 @@ class KakaoTests(unittest.TestCase):
             response = client.get('/api/compare', params=far)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error']['code'], 'TOO_FAR')
-        self.assertIn('30km', response.json()['error']['message'])
+        self.assertIn('30km', error_text(response.json()))
         self.assertEqual(self.calls, [])
 
     def test_distance_just_inside_limit_is_allowed(self):
@@ -449,13 +455,42 @@ class KakaoTests(unittest.TestCase):
         self.assertAlmostEqual(body['walkDistance'], 247, delta=10)   # 경도 0.0028° ≈ 247m
         self.assertAlmostEqual(body['walkDuration'], 3.7, delta=0.3)
 
+    def test_user_message_is_plain_and_diagnostics_go_to_detail(self):
+        # 화면에 보이는 message 에는 구조 덤프·상태 코드·경로가 없어야 합니다. 그런 건 detail 에만.
+        self.transit = {'status': 'STARTNODES_NULL', 'properties': {'total': 0}, 'routes': []}
+        with self.client() as client:
+            error = client.get('/api/compare', params=PARAMS).json()['error']
+        self.assertEqual(error['code'], 'NO_ROUTE')
+        self.assertEqual(error['message'], '출발지 근처에 탈 수 있는 정류장·역이 없어요. 출발지를 큰길이나 역 근처로 옮겨 보세요')
+        for token in ('{', '구조', 'STARTNODES', 'routes', 'HTTP', '/v2/'):
+            self.assertNotIn(token, error['message'])
+        self.assertIn("status: 'STARTNODES_NULL'", error['detail'])
+        self.assertIn('도보 조회는 성공', error['detail'])
+
+    def test_end_and_generic_no_route_messages(self):
+        self.transit = {'status': 'ENDNODES_NULL', 'routes': []}
+        with self.client() as client:
+            self.assertIn('도착지 근처에', client.get('/api/compare', params=PARAMS).json()['error']['message'])
+        self.transit = {'status': 'OK', 'routes': []}
+        with self.client() as client:
+            self.assertIn('대중교통 경로를 찾지 못했어요', client.get('/api/compare', params=PARAMS).json()['error']['message'])
+
+    def test_upstream_failure_message_is_plain(self):
+        self.failure = lambda req: httpx.Response(400, json={'code': -10, 'msg': 'sx is required'})
+        with self.client() as client:
+            error = client.get('/api/compare', params=PARAMS).json()['error']
+        self.assertNotIn('dapi.kakao.com', error['message'])
+        self.assertNotIn('400', error['message'])
+        self.assertIn('dapi.kakao.com', error['detail'])
+        self.assertIn('sx is required', error['detail'])
+
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
         self.transit = {'routes': [{'somethingElse': 1}]}
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
-        self.assertIn('받은 항목', response.json()['error']['message'])
+        self.assertIn('받은 항목', error_text(response.json()))
 
     def test_no_route(self):
         self.transit = {'errorType': 'NO_RESULT', 'message': '경로 없음'}
@@ -559,7 +594,7 @@ class PathParameterTests(KakaoTests):
         # 쿼리스트링이 통째로 사라지는 상황을 바로 알아볼 수 있어야 합니다.
         with self.client() as client:
             body = client.get('/api/compare').json()
-        self.assertIn('받은 항목: 없음', body['error']['message'])
+        self.assertIn('받은 항목: 없음', error_text(body))
 
 
 class BodyParameterTests(KakaoTests):
@@ -603,7 +638,7 @@ class BodyParameterTests(KakaoTests):
     def test_validation_error_names_the_path_it_received(self):
         # 배포에서 경로가 잘리는지 판단할 수 있도록 받은 경로를 함께 알려 줍니다.
         with self.client() as client:
-            message = client.get('/api/compare').json()['error']['message']
+            message = error_text(client.get('/api/compare').json())
         self.assertIn('받은 경로: /api/compare', message)
 
 

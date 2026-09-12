@@ -1,5 +1,6 @@
 import type { CompareResponse } from '../types/api'
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { isMobileLayout } from '../lib/layout'
 import { formatDistance, formatMinutes, formatWon } from '../utils/format'
 
 interface Props {
@@ -30,7 +31,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
     const element = sectionRef.current
     const from = previousTop.current
     previousTop.current = null
-    if (!element || from === null || !window.matchMedia('(max-width: 860px)').matches ||
+    if (!element || from === null || !isMobileLayout() ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     transition.current?.cancel()
     const delta = from - element.getBoundingClientRect().top
@@ -68,7 +69,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
   }
   const { walk, transit, savings, recommendation } = data
   const weather = data.weather
-  const isMobile = window.matchMedia('(max-width: 860px)').matches
+  const isMobile = isMobileLayout()
   const walkRecommended = recommendation.choice === 'walk'
 
   return (

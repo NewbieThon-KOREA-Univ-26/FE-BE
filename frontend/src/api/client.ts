@@ -21,12 +21,15 @@ function apiUrl(path: string): string {
 export class ApiError extends Error {
   readonly code: string
   readonly status: number
+  /** 개발자용 진단 (구조 덤프·상태 코드 등). 화면에는 디버그 모드에서만 보여 줍니다. */
+  readonly detail?: string
 
-  constructor(code: ApiErrorCode | string, message: string, status: number) {
+  constructor(code: ApiErrorCode | string, message: string, status: number, detail?: string) {
     super(message)
     this.name = 'ApiError'
     this.code = code
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -62,7 +65,7 @@ export async function getJson<T>(
 /** 응답을 JSON 으로 읽고, 실패 응답이면 ApiError 로 바꿉니다. */
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    let body: { error?: { code?: string; message?: string } } | undefined
+    let body: { error?: { code?: string; message?: string; detail?: string } } | undefined
     try {
       body = await response.json()
     } catch {
@@ -75,6 +78,7 @@ async function readJsonOrThrow<T>(response: Response): Promise<T> {
       body?.error?.code ?? 'UNKNOWN',
       body?.error?.message ?? `요청에 실패했습니다 (HTTP ${response.status})`,
       response.status,
+      body?.error?.detail,
     )
   }
   return (await response.json()) as T
