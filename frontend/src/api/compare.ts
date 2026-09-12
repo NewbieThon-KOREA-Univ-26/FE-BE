@@ -13,10 +13,8 @@ export function fetchCompare(start: Coordinate, end: Coordinate): Promise<Compar
   if (IS_MOCK) {
     return mockCompare(start, end)
   }
-  return getJson<CompareResponse>('/api/compare', {
-    startX: start.x,
-    startY: start.y,
-    endX: end.x,
-    endY: end.y,
-  })
+  // 좌표를 경로에 싣습니다. 배포 환경의 프록시가 쿼리스트링을 넘기지 않는 경우가 있어,
+  // 경로로 보내면 그 영향을 받지 않습니다. 백엔드는 두 방식을 모두 받습니다.
+  const pair = (point: Coordinate) => `${point.x},${point.y}`
+  return getJson<CompareResponse>(`/api/compare/${pair(start)}/${pair(end)}`, {})
 }
