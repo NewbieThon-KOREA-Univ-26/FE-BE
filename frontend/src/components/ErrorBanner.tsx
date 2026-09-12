@@ -18,11 +18,9 @@ const GUIDES: Record<string, Guide> = {
   NO_ROUTE: { title: '경로를 찾을 수 없습니다', hint: '출발지나 도착지를 바꿔서 다시 시도해 보세요', retry: true },
   UPSTREAM_ERROR: { title: '경로 정보를 가져오지 못했습니다', retry: true },
   RATE_LIMITED: { title: '요청이 너무 많습니다', hint: '잠시 후 다시 시도해 주세요', retry: true },
-  CONFIGURATION_ERROR: { title: 'ODsay 인증 설정을 확인해 주세요', retry: false },
-  SERVICE_NOT_CONFIGURED: { title: 'ODsay Web 키가 설정되지 않았습니다', retry: false },
   NETWORK_ERROR: {
-    title: '경로 서비스에 연결할 수 없습니다',
-    hint: '네트워크 상태를 확인한 뒤 다시 시도해 주세요',
+    title: '서버에 연결할 수 없습니다',
+    hint: '백엔드가 실행 중인지 확인하세요. 백엔드 없이 개발하려면 .env 에 VITE_USE_MOCK=true 를 넣으세요',
     retry: true,
   },
 }

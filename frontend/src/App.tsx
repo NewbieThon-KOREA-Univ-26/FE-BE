@@ -41,8 +41,8 @@ export default function App() {
             <RouteForm
               start={start}
               end={end}
-              onStartChange={(place) => { setStart(place); reset() }}
-              onEndChange={(place) => { setEnd(place); reset() }}
+              onStartChange={setStart}
+              onEndChange={setEnd}
               onSubmit={compare}
               loading={state.status === 'loading'}
             />
@@ -57,7 +57,7 @@ export default function App() {
         </section>
 
         <section className="panel panel-map" aria-label="지도">
-          <MapPanel start={start} end={end} data={state.status === 'success' ? state.data : null} />
+          <MapPanel start={start} end={end} />
         </section>
       </main>
     </div>

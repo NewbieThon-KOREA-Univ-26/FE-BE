@@ -10,23 +10,12 @@ from src.config.settings import Settings
 NonNegative = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 
 
-class Point(BaseModel):
-    x: Annotated[float, Field(ge=-180, le=180, allow_inf_nan=False)]
-    y: Annotated[float, Field(ge=-90, le=90, allow_inf_nan=False)]
-
-
-class Geometry(BaseModel):
-    # Keep disconnected sections separate; never draw invented connecting lines.
-    paths: list[list[Point]] = Field(default_factory=list)
-    geometryWarning: str | None = None
-
-
-class Walk(Geometry):
+class Walk(BaseModel):
     distance: NonNegative
     duration: NonNegative
 
 
-class Transit(Geometry):
+class Transit(BaseModel):
     duration: NonNegative
     fare: Annotated[int, Field(ge=0)]
     transfers: Annotated[int, Field(ge=0)]
@@ -69,8 +58,6 @@ class Odsay:
         self.client, self.settings = client, settings
 
     async def request(self, endpoint: str, params: dict):
-        service = {'searchWalkPathV2': '도보 경로', 'searchPubTransPathT': '대중교통 경로',
-                   'loadLane': '대중교통 지도 좌표'}.get(endpoint, '경로')
         key = self.settings.odsay_api_key.get_secret_value()
         if not key:
             raise ApiError(503, 'SERVICE_NOT_CONFIGURED', '서버의 ODsay API 키가 설정되지 않았습니다')
@@ -91,21 +78,13 @@ class Odsay:
                 if isinstance(error, list):
                     error = error[0] if error else {}
                 code = str(error.get('code')) if isinstance(error, dict) else ''
-                # Inspect known provider markers but never expose its raw message or key.
-                message = str(error.get('message', '')) if isinstance(error, dict) else ''
-                if 'ApiKeyAuthFailed' in message:
-                    raise ApiError(502, 'UPSTREAM_ERROR',
-                                   f'ODsay {service} 인증에 실패했습니다. 서버 키와 등록된 외부 통신 IP를 확인해 주세요.')
                 if code in {'3', '4', '5', '6', '-98', '-99'}:
                     raise no_route()
-                raise ApiError(502, 'UPSTREAM_ERROR',
-                               f'ODsay {service} 요청이 거절되었습니다. 해당 API의 사용 권한과 호출 한도를 확인해 주세요.')
+                raise upstream_error()
             return data
-        except httpx.TimeoutException as exc:
-            raise ApiError(502, 'UPSTREAM_ERROR', f'ODsay {service} 응답 시간이 초과되었습니다. 다시 시도해 주세요.') from exc
         except (httpx.HTTPError, ValueError) as exc:
             # Never expose upstream URLs/messages: they may contain the API key.
-            raise ApiError(502, 'UPSTREAM_ERROR', f'ODsay {service} 서비스에 연결하거나 응답을 읽지 못했습니다.') from exc
+            raise upstream_error() from exc
 
     async def transit(self, sx, sy, ex, ey) -> Transit:
         data = await self.request('searchPubTransPathT', {
@@ -126,38 +105,12 @@ class Odsay:
                 boardings = sum(s['trafficType'] in (1, 2) for s in sections)
                 if not boardings:
                     raise upstream_error()
-                candidates.append((Transit(
+                candidates.append(Transit(
                     duration=info['totalTime'], fare=info['payment'],
                     transfers=boardings - 1, walkDistance=info['totalWalk'],
                     walkDuration=sum(s['sectionTime'] for s in walking),
-                ), info.get('mapObj')))
-            selected, map_object = min(candidates, key=lambda p: (
-                p[0].duration, p[0].fare, p[0].transfers))
-            try:
-                if not map_object:
-                    raise ValueError('Missing geometry reference')
-                map_object = str(map_object)
-                first_segment = map_object.split('@', 1)[0]
-                has_coordinate_base = (
-                    '@' in map_object and len(first_segment.split(':')) == 2
-                )
-                # Zero base requests absolute WGS84 coordinates.
-                if has_coordinate_base:
-                    map_object = f'0:0@{map_object.split("@", 1)[1]}'
-                else:
-                    map_object = f'0:0@{map_object}'
-                geometry = await self.request('loadLane', {'mapObject': map_object})
-                selected.paths = [
-                    [Point.model_validate(point) for point in section['graphPos']]
-                    for lane in geometry['result']['lane'] for section in lane['section']
-                    if len(section['graphPos']) >= 2
-                ]
-                if not selected.paths:
-                    raise ValueError('Empty geometry')
-            except (ApiError, KeyError, TypeError, ValueError):
-                selected.paths = []
-                selected.geometryWarning = '대중교통 경로 선을 불러오지 못했습니다. 시간·요금은 확인할 수 있습니다.'
-            return selected
+                ))
+            return min(candidates, key=lambda p: (p.duration, p.fare, p.transfers))
         except (KeyError, TypeError, ValueError, ValidationError) as exc:
             raise upstream_error() from exc
 
@@ -178,17 +131,7 @@ class Odsay:
             seconds = float(summary['duration'])
             if not math.isfinite(seconds) or seconds < 0:
                 raise upstream_error()
-            walk = Walk(distance=summary['distance'], duration=math.ceil(seconds / 60))
-            try:
-                points = [Point.model_validate(route['coordinate'])
-                          for route in path['recommend']['routes']]
-                walk.paths = [points] if len(points) >= 2 else []
-                if not walk.paths:
-                    raise ValueError('Empty geometry')
-            except (KeyError, TypeError, ValueError):
-                walk.paths = []
-                walk.geometryWarning = '도보 경로 선을 불러오지 못했습니다. 거리·시간은 확인할 수 있습니다.'
-            return walk
+            return Walk(distance=summary['distance'], duration=math.ceil(seconds / 60))
         except (KeyError, TypeError, ValueError, ValidationError) as exc:
             raise upstream_error() from exc
 

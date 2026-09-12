@@ -3,9 +3,14 @@
     "frontend": {
       "root": "frontend/",
       "framework": "vite"
+    },
+    "backend": {
+      "root": "backend/",
+      "entrypoint": "src.main:app"
     }
   },
   "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]
 }

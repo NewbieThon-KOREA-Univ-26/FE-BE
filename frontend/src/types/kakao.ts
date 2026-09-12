@@ -23,10 +23,6 @@ export interface KakaoMarker {
   setMap(map: KakaoMap | null): void
 }
 
-export interface KakaoPolyline {
-  setMap(map: KakaoMap | null): void
-}
-
 /** keywordSearch 결과 항목. x = 경도, y = 위도 (문자열로 옵니다). */
 export interface KakaoPlaceResult {
   id: string
@@ -51,10 +47,6 @@ export interface KakaoSdk {
     LatLngBounds: new () => KakaoLatLngBounds
     Map: new (container: HTMLElement, options: { center: KakaoLatLng; level: number }) => KakaoMap
     Marker: new (options: { position: KakaoLatLng; map?: KakaoMap }) => KakaoMarker
-    Polyline: new (options: {
-      map: KakaoMap; path: KakaoLatLng[]; strokeWeight: number;
-      strokeColor: string; strokeOpacity: number; strokeStyle: string;
-    }) => KakaoPolyline
     services: {
       Status: { OK: string; ZERO_RESULT: string; ERROR: string }
       Places: new () => KakaoPlacesService

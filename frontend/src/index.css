@@ -305,17 +305,6 @@ input {
   color: var(--muted);
 }
 
-.odsay-attribution {
-  align-self: flex-end;
-  color: var(--muted);
-  font-size: 11px;
-  text-decoration: none;
-}
-
-.odsay-attribution:hover {
-  text-decoration: underline;
-}
-
 /* 결과 */
 .result {
   display: flex;
