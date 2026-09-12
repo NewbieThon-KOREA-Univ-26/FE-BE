@@ -290,3 +290,41 @@ class EchoTests(KakaoTests):
             body = client.get('/api/echo', headers={'Authorization': 'KakaoAK secret-value'}).json()
         self.assertIn('authorization', body['headerNames'])
         self.assertNotIn('secret-value', str(body))
+
+
+class CorsTests(unittest.TestCase):
+    """다른 도메인에 배포한 프론트가 부를 수 있어야 합니다.
+
+    브라우저는 POST 전에 OPTIONS(프리플라이트)를 먼저 보냅니다.
+    여기서 Access-Control-Allow-Origin 이 빠지면 요청이 아예 막힙니다.
+    """
+
+    ORIGIN = 'https://walkride-fe.vercel.app'
+
+    def app(self, origins):
+        return TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     cors_origins=origins),
+            httpx.MockTransport(lambda request: httpx.Response(200, json={'routes': []}))))
+
+    def test_preflight_is_allowed_for_post(self):
+        response = self.app([self.ORIGIN]).options('/api/compare', headers={
+            'Origin': self.ORIGIN,
+            'Access-Control-Request-Method': 'POST',
+            'Access-Control-Request-Headers': 'content-type',
+        })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers['access-control-allow-origin'], self.ORIGIN)
+        self.assertIn('POST', response.headers['access-control-allow-methods'])
+
+    def test_unknown_origin_is_not_allowed(self):
+        response = self.app([self.ORIGIN]).options('/api/compare', headers={
+            'Origin': 'https://somewhere-else.example',
+            'Access-Control-Request-Method': 'POST',
+        })
+        self.assertNotIn('access-control-allow-origin', response.headers)
+
+    def test_comma_separated_origins_are_accepted(self):
+        # 배포 환경변수에 쉼표로 적어도 동작해야 합니다.
+        settings = Settings(_env_file=None, cors_origins=f'{self.ORIGIN}, http://localhost:5173')
+        self.assertEqual(settings.cors_origins, [self.ORIGIN, 'http://localhost:5173'])

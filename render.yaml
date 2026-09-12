@@ -1,0 +1,23 @@
+# Render 배포 설정 (Blueprint)
+#
+# Render 대시보드에서 Blueprint 로 이 저장소를 연결하면 아래 설정대로 만들어집니다.
+# 이미 서비스를 손으로 만들었다면 Settings 에서 같은 값으로 맞추면 됩니다.
+services:
+  - type: web
+    name: walkride-api
+    runtime: python
+    plan: free
+    # 저장소 루트가 아니라 backend/ 를 기준으로 빌드합니다.
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # --host 0.0.0.0 과 --port $PORT 가 반드시 있어야 합니다.
+    # 포트를 8000 처럼 고정하면 Render 가 트래픽을 보내지 못해 404 가 납니다.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # 값은 대시보드에서 직접 넣습니다. 저장소에 키를 두지 않습니다.
+      - key: KAKAO_REST_API_KEY
+        sync: false
+      # 프론트 주소. 쉼표로 여러 개를 적을 수 있습니다.
+      - key: CORS_ORIGINS
+        value: https://walkride-fe.vercel.app,http://localhost:5173
