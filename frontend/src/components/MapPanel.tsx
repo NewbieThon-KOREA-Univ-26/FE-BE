@@ -178,6 +178,66 @@ export function MapPanel({ start, end, data }: Props) {
     }
   }, [start, end, status, data])
 
+  useEffect(() => {
+    if (status !== 'ready' || !containerRef.current) return
+    const canvas = containerRef.current
+    const layout = canvas.closest('.app-main')
+    const panel = layout?.querySelector<HTMLElement>('.panel-side')
+    let frame = 0
+    let trackingUntil = 0
+
+    const positionScale = () => {
+      const scale = Array.from(canvas.children).find((element): element is HTMLElement =>
+        element instanceof HTMLElement &&
+        /^\d+(?:\.\d+)?(?:m|km)$/.test(element.textContent?.trim() ?? '') &&
+        element.style.position === 'absolute')
+      const canvasRect = canvas.getBoundingClientRect()
+      const result = panel?.querySelector<HTMLElement>('.result')
+      const legend = layout?.querySelector<HTMLElement>('.map-legend')
+      const mobile = window.matchMedia('(max-width: 860px)').matches
+      const bottom = mobile && result
+        ? Math.max(14, canvasRect.bottom - result.getBoundingClientRect().top + 12)
+        : 14
+      if (scale) {
+        scale.style.setProperty('left', 'auto', 'important')
+        scale.style.setProperty('right', '14px', 'important')
+        scale.style.setProperty('bottom', `${bottom}px`, 'important')
+      }
+      if (mobile && legend) {
+        legend.style.bottom = `${bottom}px`
+      }
+    }
+
+    const updatePosition = () => {
+      positionScale()
+      if (performance.now() < trackingUntil) {
+        frame = requestAnimationFrame(updatePosition)
+      }
+    }
+    const schedulePosition = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(updatePosition)
+    }
+    const trackTransition = () => {
+      trackingUntil = performance.now() + 400
+      schedulePosition()
+    }
+    const changes = new MutationObserver(trackTransition)
+    changes.observe(canvas, { childList: true, subtree: true, characterData: true })
+    if (panel) changes.observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+    const resize = new ResizeObserver(schedulePosition)
+    resize.observe(canvas)
+    if (panel) resize.observe(panel)
+    window.addEventListener('resize', trackTransition)
+    trackTransition()
+    return () => {
+      cancelAnimationFrame(frame)
+      changes.disconnect()
+      resize.disconnect()
+      window.removeEventListener('resize', trackTransition)
+    }
+  }, [status, data])
+
   if (!hasKakaoKey) {
     return (
       <div className="map map-placeholder">
