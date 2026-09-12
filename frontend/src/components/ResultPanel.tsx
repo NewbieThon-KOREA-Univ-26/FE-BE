@@ -64,6 +64,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
     setSearchHidden(false)
   }
   const { walk, transit, savings, recommendation } = data
+  const weather = data.weather
   const walkRecommended = recommendation.choice === 'walk'
 
   return (
@@ -131,8 +132,28 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
 
       <p className="result-conclusion">
         <strong>{walkRecommended ? '걷는 걸 추천합니다' : '타는 게 낫습니다'}</strong>
-        <span>{recommendation.reason}</span>
+        <span>
+          {recommendation.reason}
+          {expanded && recommendation.weatherReason && ` · ${recommendation.weatherReason}`}
+        </span>
       </p>
+
+      {expanded && weather && (
+        <div className="weather-summary">
+          {weather.iconUrl ? (
+            <img src={weather.iconUrl} alt="" />
+          ) : (
+            <span className="weather-emoji" aria-hidden="true">
+              {weather.condition.includes('비') ? '🌧️' : weather.condition.includes('눈') ? '❄️' : '☀️'}
+            </span>
+          )}
+          <span>현재 날씨: {weather.condition}</span>
+          {weather.temperatureC !== undefined && <strong>{weather.temperatureC}°C</strong>}
+          {weather.precipitationProbability !== undefined && (
+            <small>강수확률 {weather.precipitationProbability}%</small>
+          )}
+        </div>
+      )}
 
       <div className="compare-grid">
         <article className={`compare-card card-walk ${walkRecommended ? 'is-recommended' : ''}`}>
@@ -175,7 +196,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
               <dd>{transit.transfers}회</dd>
             </div>
             <div>
-              <dt>포함된 도보</dt>
+              <dt>도보 구간</dt>
               <dd>
                 {formatDistance(transit.walkDistance)} · {formatMinutes(transit.walkDuration)}
               </dd>
@@ -184,6 +205,8 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
         </article>
       </div>
 
+      {/* 모바일에서 요약만 보일 때 감추는 일은 CSS 가 합니다.
+          여기서 expanded 로 걸러내면 데스크톱에서도 "다시 검색" 이 사라집니다. */}
       <p className="status">지도: 빨간색은 도보 · 파란색은 버스·지하철 탑승 구간입니다.</p>
       {[walk.geometryWarning, transit.geometryWarning].filter(Boolean).map((message) => (
         <p className="status" role="status" key={message}>{message}</p>
@@ -192,9 +215,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
         <p className="status">이 결과에는 지도 경로가 없습니다. 거리·시간 비교를 참고해 주세요.</p>
       )}
 
-      <a className="odsay-attribution" href="https://www.odsay.com" target="_blank" rel="noreferrer">
-        powered by www.ODsay.com
-      </a>
+      <p className="attribution">경로 정보 제공: 카카오맵</p>
 
       <div className="result-actions">
         {savings.amount > 0 && (

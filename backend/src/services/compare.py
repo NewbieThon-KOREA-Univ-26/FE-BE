@@ -281,26 +281,46 @@ class Odsay:
             raise upstream_error() from exc
 
     async def compare(self, sx, sy, ex, ey) -> CompareResponse:
-        # Await both requests even when one fails so no task outlives the request/client.
-        results = await asyncio.gather(
-            self.walk(sx, sy, ex, ey), self.transit(sx, sy, ex, ey),
-            return_exceptions=True,
-        )
-        for result in results:
-            if isinstance(result, Exception):
-                raise result
-        walk, transit = results
-        extra = walk.duration - transit.duration
-        choice = 'walk' if (walk.duration <= self.settings.walk_max_minutes
-                            and walk.distance <= self.settings.walk_max_meters) else 'transit'
-        if choice == 'transit':
-            reason = f'도보 {walk.duration:g}분·{walk.distance:g}m로 걷기 추천 기준을 초과합니다'
-        else:
-            time = f'{extra:g}분 더 걸리지만' if extra > 0 else (
-                f'{-extra:g}분 더 빠르고' if extra < 0 else '같은 시간이 걸리고')
-            reason = f'걸으면 {time} {transit.fare:,}원을 아낍니다'
-        return CompareResponse(
-            walk=walk, transit=transit,
-            savings=Savings(amount=transit.fare, extraMinutes=extra),
-            recommendation=Recommendation(choice=choice, reason=reason),
-        )
+        return await gather_and_compare(self, sx, sy, ex, ey)
+
+
+# --- 제공자 공통 -----------------------------------------------------------
+
+async def gather_and_compare(provider, sx, sy, ex, ey) -> CompareResponse:
+    """도보와 대중교통을 함께 조회해 비교 결과를 만듭니다.
+
+    provider 는 walk(), transit() 와 settings 를 가진 객체면 무엇이든 됩니다.
+    (Odsay, KakaoRouting 이 여기에 해당합니다.)
+    """
+    # 하나가 실패해도 두 요청을 모두 기다립니다. 클라이언트보다 오래 사는 태스크를 남기지 않기 위해서입니다.
+    results = await asyncio.gather(
+        provider.walk(sx, sy, ex, ey), provider.transit(sx, sy, ex, ey),
+        return_exceptions=True,
+    )
+    for result in results:
+        if isinstance(result, Exception):
+            raise result
+    walk, transit = results
+    return build_comparison(walk, transit, provider.settings)
+
+
+def build_comparison(walk: Walk, transit: Transit, settings: Settings) -> CompareResponse:
+    """절감액과 추천을 계산합니다.
+
+    "도보로 너무 먼 거리" 와 "너무 가까워서 대중교통이 무의미" 는 에러가 아닙니다.
+    항상 200 으로 응답하고 recommendation.choice 로 구분합니다.
+    """
+    extra = walk.duration - transit.duration
+    choice = 'walk' if (walk.duration <= settings.walk_max_minutes
+                        and walk.distance <= settings.walk_max_meters) else 'transit'
+    if choice == 'transit':
+        reason = f'도보 {walk.duration:g}분·{walk.distance:g}m로 걷기 추천 기준을 초과합니다'
+    else:
+        time = f'{extra:g}분 더 걸리지만' if extra > 0 else (
+            f'{-extra:g}분 더 빠르고' if extra < 0 else '같은 시간이 걸리고')
+        reason = f'걸으면 {time} {transit.fare:,}원을 아낍니다'
+    return CompareResponse(
+        walk=walk, transit=transit,
+        savings=Savings(amount=transit.fare, extraMinutes=extra),
+        recommendation=Recommendation(choice=choice, reason=reason),
+    )

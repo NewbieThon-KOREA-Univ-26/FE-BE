@@ -17,6 +17,7 @@ from src.services.auth import (
     AuthUser,
     KakaoAuth,
 )
+from src.services.kakao import KakaoRouting
 
 Longitude = Annotated[float, Query(ge=-180, le=180, allow_inf_nan=False)]
 Latitude = Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)]
@@ -28,8 +29,14 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
         async with httpx.AsyncClient(transport=transport) as client:
-            app.state.odsay = Odsay(client, settings)
-            app.state.kakao_auth = KakaoAuth(client, settings)
+from src.services.auth import (
+    SESSION_COOKIE,
+    STATE_COOKIE,
+    STATE_TTL_SECONDS,
+    AuthUser,
+    KakaoAuth,
+)
+from src.services.kakao import KakaoRouting
             yield
 
     app = FastAPI(title='걸을만한데? API', lifespan=lifespan)
@@ -112,7 +119,7 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
                       endX: Longitude, endY: Latitude):
         if (startX, startY) == (endX, endY):
             raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
-        return await request.app.state.odsay.compare(startX, startY, endX, endY)
+        return await request.app.state.router.compare(startX, startY, endX, endY)
 
     return app
 
