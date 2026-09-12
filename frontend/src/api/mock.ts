@@ -73,5 +73,10 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
           ? `${extraMinutes}분 더 걷고 ${fareText}원을 아낍니다`
           : `걸으면 ${extraMinutes}분이나 더 걸려서 타는 게 낫습니다`,
     },
+    weather: {
+      condition: '맑음',
+      temperatureC: 23,
+      precipitationProbability: 10,
+    },
   }
 }

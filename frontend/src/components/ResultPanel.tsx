@@ -60,6 +60,7 @@ export function ResultPanel({ data, onReset }: Props) {
     setSearchHidden(false)
   }
   const { walk, transit, savings, recommendation } = data
+  const weather = data.weather
   const walkRecommended = recommendation.choice === 'walk'
 
   return (
@@ -126,8 +127,28 @@ export function ResultPanel({ data, onReset }: Props) {
 
       <p className="result-conclusion">
         <strong>{walkRecommended ? '걷는 걸 추천합니다' : '타는 게 낫습니다'}</strong>
-        <span>{recommendation.reason}</span>
+        <span>
+          {recommendation.reason}
+          {recommendation.weatherReason && ` · ${recommendation.weatherReason}`}
+        </span>
       </p>
+
+      {weather && (
+        <div className="weather-summary">
+          {weather.iconUrl ? (
+            <img src={weather.iconUrl} alt="" />
+          ) : (
+            <span className="weather-emoji" aria-hidden="true">
+              {weather.condition.includes('비') ? '🌧️' : weather.condition.includes('눈') ? '❄️' : '☀️'}
+            </span>
+          )}
+          <span>현재 날씨: {weather.condition}</span>
+          {weather.temperatureC !== undefined && <strong>{weather.temperatureC}°C</strong>}
+          {weather.precipitationProbability !== undefined && (
+            <small>강수확률 {weather.precipitationProbability}%</small>
+          )}
+        </div>
+      )}
 
       <div className="compare-grid">
         <article className={`compare-card card-walk ${walkRecommended ? 'is-recommended' : ''}`}>
