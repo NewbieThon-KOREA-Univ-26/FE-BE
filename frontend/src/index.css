@@ -1043,8 +1043,16 @@ input {
     font-size: 19px;
   }
 
+  .brand-logo {
+    transform: translateX(-36px) scale(1.02);
+  }
+
   .app-header p {
-    display: none;
+    display: block;
+  }
+
+  .brand-logo {
+    transform: translateX(-36px) scale(1.02);
   }
 
   .search-panel .route-form-shell {
@@ -1314,6 +1322,7 @@ input {
     left: 12px;
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
+
 }
 
 @media (max-width: 400px) {
