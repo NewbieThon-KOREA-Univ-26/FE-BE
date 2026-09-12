@@ -45,3 +45,20 @@ npm run dev
 - JavaScript SDK 허용 도메인에 `https://walkride-fe.vercel.app` 과 `http://localhost:5173` 을 등록합니다.
 
 환경변수를 바꾼 뒤에는 **재배포해야** `VITE_` 값이 반영됩니다.
+
+## 백엔드를 따로 배포하기 (라우팅이 계속 막힐 때)
+
+Vercel Services 는 Beta 라서 `/api/*` 로 보낸 경로와 쿼리가 백엔드까지 전달되지 않는
+경우가 있습니다. 그럴 때는 라우팅 계층을 건너뛰는 편이 빠릅니다.
+
+1. `backend/` 를 Root Directory 로 하는 **별도 Vercel 프로젝트**를 만듭니다.
+2. 그 프로젝트에 `KAKAO_REST_API_KEY` 와 `CORS_ORIGINS=["https://walkride-fe.vercel.app"]` 를 넣습니다.
+3. 프론트 프로젝트에 `VITE_API_BASE_URL=https://<백엔드주소>` 를 넣고 재배포합니다.
+
+프론트는 이 값이 있으면 그 주소로 직접 호출합니다. 비어 있으면 지금처럼 같은 도메인의
+`/api` 로 보냅니다. 코드 수정은 필요 없습니다.
+
+## 요청이 어떻게 도착하는지 확인하기
+
+`GET /api/echo?a=1` 을 열면 백엔드가 실제로 받은 메서드·경로·쿼리·본문을 그대로 돌려줍니다.
+프록시가 무엇을 지우는지 확인할 때 쓰세요. 헤더는 이름만 담고 값은 담지 않습니다.

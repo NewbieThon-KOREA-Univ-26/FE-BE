@@ -96,6 +96,26 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
             'message': f'서버에서 예기치 못한 오류가 발생했습니다 ({type(exc).__name__})',
         }})
 
+    @app.api_route('/api/echo', methods=['GET', 'POST'])
+    async def echo(request: Request):
+        """요청이 백엔드에 어떤 모습으로 도착했는지 그대로 보여 줍니다.
+
+        배포 프록시가 경로·쿼리·메서드·본문 중 무엇을 지우는지 확인하는 용도입니다.
+        비밀이 섞일 수 있는 헤더 값은 담지 않고 이름만 담습니다.
+        """
+        try:
+            body = (await request.body()).decode('utf-8', 'replace')[:500]
+        except Exception:
+            body = '(읽지 못함)'
+        return {
+            'method': request.method,
+            'path': request.url.path,
+            'query': str(request.url.query),
+            'queryKeys': sorted(request.query_params),
+            'body': body,
+            'headerNames': sorted(request.headers),
+        }
+
     @app.get('/api/health')
     async def health():
         return {'status': 'ok', 'provider': settings.route_provider}
