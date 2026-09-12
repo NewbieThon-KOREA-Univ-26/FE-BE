@@ -17,6 +17,14 @@ interface Props {
 export function RouteForm({ start, end, onStartChange, onEndChange, onSubmit, loading }: Props) {
   const geo = useCurrentPosition()
   const [validation, setValidation] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [hidden, setHidden] = useState(false)
+  const wasLoading = useRef(loading)
+
+  useEffect(() => {
+    if (wasLoading.current && !loading) setExpanded(false)
+    wasLoading.current = loading
+  }, [loading])
 
   const useCurrentLocation = () => {
     geo.request()
@@ -49,7 +57,27 @@ export function RouteForm({ start, end, onStartChange, onEndChange, onSubmit, lo
   const canUseLocation = geo.status !== 'denied' && geo.status !== 'unsupported'
 
   return (
-    <form className={`route-form ${loading ? 'is-loading' : ''}`} onSubmit={handleSubmit} noValidate>
+    <div className={`route-form-shell ${hidden ? 'is-hidden' : ''}`}>
+      <button
+        type="button"
+        className="search-toggle"
+        aria-expanded={!hidden}
+        disabled={loading}
+        onClick={() => {
+          setHidden((value) => !value)
+          setExpanded(false)
+        }}
+      >
+        {hidden ? '검색창 펼치기 ▼' : '검색창 접기 ▲'}
+      </button>
+      <form
+      className={`route-form ${expanded ? 'is-expanded' : ''} ${loading ? 'is-loading' : ''}`}
+      onFocusCapture={(event) => {
+        if (event.target instanceof HTMLInputElement) setExpanded(true)
+      }}
+      onSubmit={handleSubmit}
+      noValidate
+    >
       <PlaceSearchInput id="start" label="출발지" value={start} onChange={onStartChange} />
       <PlaceSearchInput id="end" label="도착지" value={end} onChange={onEndChange} />
 
@@ -81,6 +109,7 @@ export function RouteForm({ start, end, onStartChange, onEndChange, onSubmit, lo
       <button type="submit" className="primary" disabled={loading}>
         {loading ? '비교하는 중…' : '비교하기'}
       </button>
-    </form>
+      </form>
+    </div>
   )
 }

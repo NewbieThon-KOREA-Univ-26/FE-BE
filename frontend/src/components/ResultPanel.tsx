@@ -1,5 +1,5 @@
 import type { CompareResponse } from '../types/api'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { formatDistance, formatMinutes, formatWon } from '../utils/format'
 
 interface Props {
@@ -17,21 +17,108 @@ interface Props {
  */
 export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const [searchHidden, setSearchHidden] = useState(false)
+  const [dragOffset, setDragOffset] = useState(0)
+  const dragStart = useRef<{ id: number; y: number } | null>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const previousTop = useRef<number | null>(null)
+  const transition = useRef<Animation | null>(null)
+
+  useLayoutEffect(() => {
+    const element = sectionRef.current
+    const from = previousTop.current
+    previousTop.current = null
+    if (!element || from === null || !window.matchMedia('(max-width: 860px)').matches ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    transition.current?.cancel()
+    const delta = from - element.getBoundingClientRect().top
+    transition.current = element.animate([
+      { transform: `translateY(${delta}px)`, opacity: 0.85 },
+      { transform: 'translateY(0)', opacity: 1 },
+    ], { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
+    return () => transition.current?.cancel()
+  }, [expanded])
+
+  const capturePosition = () => {
+    previousTop.current = sectionRef.current?.getBoundingClientRect().top ?? null
+  }
+
+  const closeDetails = () => {
+    if (expanded) capturePosition()
+    dragStart.current = null
+    setDragOffset(0)
+    setExpanded(false)
+    setSearchHidden(false)
+  }
+  const toggleDetails = () => {
+    if (expanded) {
+      closeDetails()
+    } else {
+      capturePosition()
+      setSearchHidden(true)
+      setExpanded(true)
+    }
+  }
+  const returnToSearch = () => {
+    closeDetails()
+    setSearchHidden(false)
+  }
   const { walk, transit, savings, recommendation } = data
   const walkRecommended = recommendation.choice === 'walk'
 
   return (
-    <section className={`result ${walkRecommended ? 'result-walk' : 'result-transit'} ${expanded ? 'is-expanded' : ''}`} aria-live="polite">
+    <section
+      ref={sectionRef}
+      className={`result ${walkRecommended ? 'result-walk' : 'result-transit'} ${expanded ? 'is-expanded' : ''} ${searchHidden ? 'is-search-hidden' : ''} ${dragOffset > 0 ? 'is-dragging' : ''}`}
+      style={{ '--result-drag-offset': `${dragOffset}px` } as CSSProperties}
+      aria-live="polite"
+      onKeyDown={(event) => { if (event.key === 'Escape') returnToSearch() }}
+    >
+      {expanded && (
+        <div className="result-close-bar">
+          <button type="button" className="result-close" aria-label="검색창과 요약으로 돌아가기" onClick={returnToSearch}>
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      )}
+      {expanded && (
+        <button
+          type="button"
+          className="result-drag-handle"
+          aria-label="상세보기 접고 지도 보기"
+          onPointerDown={(event) => {
+            if (!event.isPrimary || event.button !== 0) return
+            dragStart.current = { id: event.pointerId, y: event.clientY }
+            event.currentTarget.setPointerCapture(event.pointerId)
+          }}
+          onPointerMove={(event) => {
+            if (dragStart.current?.id !== event.pointerId) return
+            setDragOffset(Math.max(0, event.clientY - dragStart.current.y))
+          }}
+          onPointerUp={(event) => {
+            if (dragStart.current?.id !== event.pointerId) return
+            const distance = event.clientY - dragStart.current.y
+            dragStart.current = null
+            setDragOffset(0)
+            if (distance >= 64) closeDetails()
+          }}
+          onPointerCancel={() => { dragStart.current = null; setDragOffset(0) }}
+          onLostPointerCapture={() => { dragStart.current = null; setDragOffset(0) }}
+          onClick={(event) => { if (event.detail === 0) closeDetails() }}
+        >
+          <span aria-hidden="true" />
+        </button>
+      )}
       <div
         className="result-hero"
         role="button"
         tabIndex={0}
         aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={toggleDetails}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
-            setExpanded((value) => !value)
+            toggleDetails()
           }
         }}
       >
