@@ -150,9 +150,11 @@ class KakaoRouting:
         if not key:
             raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
                            '서버의 카카오 REST API 키가 설정되지 않았습니다')
+        # 환경변수로 바꿀 때 전체 URL 을 넣거나 앞 슬래시를 빼도 되게 합니다.
+        url = path if path.startswith(('http://', 'https://')) else f"{KAKAO_HOST}/{path.lstrip('/')}"
         try:
             response = await self.client.get(
-                f'{KAKAO_HOST}{path}',
+                url,
                 params=params,
                 headers={'Authorization': f'KakaoAK {key}'},
                 timeout=self.settings.upstream_timeout_seconds,

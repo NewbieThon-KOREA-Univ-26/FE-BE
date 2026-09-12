@@ -144,6 +144,40 @@ class KakaoTests(unittest.TestCase):
         self.assertIn('JSON', response.json()['error']['message'])
         self.assertNotIn('html', response.json()['error']['message'])
 
+    def test_walk_failure_says_transit_succeeded(self):
+        # 도보만 실패하면 대중교통은 됐다는 사실도 같은 메시지에 담습니다.
+        self.failure = lambda req: (httpx.Response(404) if 'pedestrian' in req.url.path
+                                    else httpx.Response(200, json=copy.deepcopy(self.transit)))
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        message = response.json()['error']['message']
+        self.assertIn('404', message)
+        self.assertIn('대중교통 조회는 성공', message)
+
+    def test_both_failures_are_reported_together(self):
+        self.failure = lambda req: httpx.Response(404 if 'pedestrian' in req.url.path else 400)
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        message = response.json()['error']['message']
+        self.assertIn('404', message)
+        self.assertIn('400', message)
+        self.assertIn('도보', message)
+        self.assertIn('대중교통', message)
+
+    def test_endpoint_paths_accept_full_url_or_missing_slash(self):
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_walk_path='https://dapi.kakao.com/v2/routing/pedestrian',
+                     kakao_transit_path='v2/routing/publictraffic'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            self.assertEqual(client.get('/api/compare', params=PARAMS).status_code, 200)
+        self.assertEqual(sorted(str(r.url).split('?')[0] for r in self.calls),
+                         ['https://dapi.kakao.com/v2/routing/pedestrian',
+                          'https://dapi.kakao.com/v2/routing/publictraffic'])
+
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
         self.transit = {'routes': [{'somethingElse': 1}]}
