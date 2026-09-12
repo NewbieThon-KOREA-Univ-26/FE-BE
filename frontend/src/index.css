@@ -602,11 +602,13 @@ input {
 
 .compare-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): 그리드 칸이 내용 폭만큼 커지지 않게 해 카드가 패널 밖으로 넘치지 않습니다. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .compare-card {
+  min-width: 0;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -672,20 +674,22 @@ input {
 
 .compare-card dl > div {
   display: flex;
+  /* 좁으면 값이 다음 줄로 내려갑니다. 라벨을 글자 단위로 쪼개는 것보다 낫습니다. */
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px 8px;
   align-items: baseline;
 }
 
 .compare-card dt {
   font-size: 12px;
   color: var(--muted);
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .compare-card dd {
-  margin: 0;
+  margin: 0 0 0 auto;
   font-weight: 700;
   text-align: right;
   white-space: nowrap;

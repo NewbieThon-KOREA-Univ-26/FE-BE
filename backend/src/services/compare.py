@@ -375,20 +375,36 @@ async def gather_and_compare(provider, sx, sy, ex, ey) -> CompareResponse:
     return build_comparison(walk, transit, provider.settings)
 
 
+def format_minutes(minutes: float) -> str:
+    """16.4 → '16분', 312.2 → '5시간 12분'. 사람에게 보여 줄 문장용이라 분 단위로 반올림합니다."""
+    total = max(0, round(minutes))
+    hours, rest = divmod(total, 60)
+    if hours == 0:
+        return f'{rest}분'
+    return f'{hours}시간' if rest == 0 else f'{hours}시간 {rest}분'
+
+
+def format_distance(meters: float) -> str:
+    """320 → '320m', 19274 → '19.3km'"""
+    return f'{round(meters)}m' if meters < 1000 else f'{meters / 1000:.1f}km'
+
+
 def build_comparison(walk: Walk, transit: Transit, settings: Settings) -> CompareResponse:
     """절감액과 추천을 계산합니다.
 
     "도보로 너무 먼 거리" 와 "너무 가까워서 대중교통이 무의미" 는 에러가 아닙니다.
     항상 200 으로 응답하고 recommendation.choice 로 구분합니다.
     """
-    extra = walk.duration - transit.duration
+    # 소요시간은 제공자에 따라 소수(초/60)로 올 수 있습니다. 차이는 분 단위로 반올림해 돌려줍니다.
+    extra = round(walk.duration - transit.duration)
     choice = 'walk' if (walk.duration <= settings.walk_max_minutes
                         and walk.distance <= settings.walk_max_meters) else 'transit'
     if choice == 'transit':
-        reason = f'도보 {walk.duration:g}분·{walk.distance:g}m로 걷기 추천 기준을 초과합니다'
+        reason = (f'도보 {format_minutes(walk.duration)}·{format_distance(walk.distance)}로 '
+                  '걷기 추천 기준을 초과합니다')
     else:
-        time = f'{extra:g}분 더 걸리지만' if extra > 0 else (
-            f'{-extra:g}분 더 빠르고' if extra < 0 else '같은 시간이 걸리고')
+        time = f'{format_minutes(extra)} 더 걸리지만' if extra > 0 else (
+            f'{format_minutes(-extra)} 더 빠르고' if extra < 0 else '같은 시간이 걸리고')
         reason = f'걸으면 {time} {transit.fare:,}원을 아낍니다'
     return CompareResponse(
         walk=walk, transit=transit,

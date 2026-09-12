@@ -127,7 +127,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
       >
         <p className="result-label">{walkRecommended ? '걸으면 아끼는 돈' : '걸으면 아끼지만'}</p>
         <p className="result-amount">{formatWon(savings.amount)}</p>
-        <p className="result-sub">{savings.extraMinutes === 0 ? '소요시간이 같아요'
+        <p className="result-sub">{Math.round(savings.extraMinutes) === 0 ? '소요시간이 같아요'
           : `${formatMinutes(Math.abs(savings.extraMinutes))} ${savings.extraMinutes < 0 ? '더 빠름' : '더 걸림'}`}</p>
         <small className="result-expand-hint">{expanded ? '터치하면 요약으로 돌아가기' : '터치하면 상세 정보 보기'}</small>
       </div>

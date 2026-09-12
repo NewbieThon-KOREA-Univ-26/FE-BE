@@ -250,5 +250,33 @@ class PathTests(CompareTests):
         self.assertNotIn('path', body['transit'])
 
 
+class FormattingTests(unittest.TestCase):
+    """소요시간이 초/60 같은 소수로 와도 사람에게 보이는 값은 분 단위로 깔끔해야 합니다."""
+
+    def test_reason_and_extra_minutes_are_rounded(self):
+        from src.config.settings import Settings
+        from src.services.compare import Transit, Walk, build_comparison
+        walk = Walk(distance=19274, duration=18734 / 60, paths=[])
+        transit = Transit(duration=4685 / 60, fare=1750, transfers=2,
+                          walkDistance=1200, walkDuration=15.3, paths=[])
+        body = build_comparison(walk, transit, Settings(_env_file=None))
+        self.assertEqual(body.savings.extraMinutes, 234)
+        self.assertEqual(body.recommendation.reason, '도보 5시간 12분·19.3km로 걷기 추천 기준을 초과합니다')
+
+    def test_walk_reason_uses_rounded_minutes(self):
+        from src.config.settings import Settings
+        from src.services.compare import Transit, Walk, build_comparison, format_distance, format_minutes
+        walk = Walk(distance=1180, duration=901 / 60, paths=[])
+        transit = Transit(duration=10.4, fare=1400, transfers=0, walkDistance=0, walkDuration=0, paths=[])
+        body = build_comparison(walk, transit, Settings(_env_file=None))
+        self.assertEqual(body.recommendation.choice, 'walk')
+        self.assertEqual(body.savings.extraMinutes, 5)
+        self.assertEqual(body.recommendation.reason, '걸으면 5분 더 걸리지만 1,400원을 아낍니다')
+        self.assertEqual(format_minutes(60), '1시간')
+        self.assertEqual(format_minutes(0.4), '0분')
+        self.assertEqual(format_distance(999.6), '1000m')
+        self.assertEqual(format_distance(1000), '1.0km')
+
+
 if __name__ == '__main__':
     unittest.main()
