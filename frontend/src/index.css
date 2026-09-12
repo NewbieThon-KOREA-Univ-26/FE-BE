@@ -683,6 +683,8 @@ input {
   }
 
   .panel-side .result:not(.is-expanded) {
+    max-height: none;
+    overflow: visible;
     padding: 0;
     border: 0;
     background: transparent;
