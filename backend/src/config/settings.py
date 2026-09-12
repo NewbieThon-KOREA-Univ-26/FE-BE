@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # 데브톡에 "sx is required" (파라미터는 정상 포함) 사례가 있어, 문서가 POST 본문을
     # 요구하면 배포 환경변수로만 바꿀 수 있게 둡니다.
     kakao_request_style: Literal['get', 'post-json', 'post-form'] = 'get'
+    # true 면 GET /api/debug/upstream/{walk|transit} 로 카카오 원본 응답을 그대로 볼 수 있습니다.
+    # 응답 필드 이름을 확인하는 용도입니다. 키는 응답에 없으므로 노출되지 않습니다.
+    debug_raw_upstream: bool = False
 
     odsay_api_key: SecretStr = SecretStr('')
 
