@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # 예) origin={sx},{sy}&destination={ex},{ey}
     kakao_transit_query: str = 'sx={sx}&sy={sy}&ex={ex}&ey={ey}'
     kakao_walk_query: str = 'sx={sx}&sy={sy}&ex={ex}&ey={ey}'
+    # 파라미터를 어디에 실을지. 'get'(쿼리스트링) | 'post-json' | 'post-form'.
+    # 데브톡에 "sx is required" (파라미터는 정상 포함) 사례가 있어, 문서가 POST 본문을
+    # 요구하면 배포 환경변수로만 바꿀 수 있게 둡니다.
+    kakao_request_style: Literal['get', 'post-json', 'post-form'] = 'get'
 
     odsay_api_key: SecretStr = SecretStr('')
 

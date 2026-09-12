@@ -6,6 +6,7 @@ src/services/kakao.py 의 *_KEYS 목록과 이 픽스처를 함께 고치세요.
 """
 
 import copy
+import json
 import unittest
 
 import httpx
@@ -231,6 +232,58 @@ class KakaoTests(unittest.TestCase):
         self.assertIn('dapi.kakao.com/v2/routing/pedestrian', message)
         self.assertIn('KAKAO_WALK_QUERY', message)
         self.assertNotIn('kakao-key', message)
+
+    def test_bad_request_shows_sent_names_and_kakao_explanation_without_key(self):
+        # 400 이면 어떤 이름을 보냈고 카카오가 뭐라고 거절했는지 보여야 고칠 수 있습니다.
+        # 카카오 설명에 키가 섞여 있어도 지우고, 좌표 값은 담지 않습니다.
+        self.failure = lambda req: httpx.Response(
+            400, json={'code': -10, 'msg': 'origin is required (auth kakao-key)'})
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        message = response.json()['error']['message']
+        self.assertIn('보낸 파라미터: sx, sy, ex, ey', message)
+        self.assertIn('코드 -10', message)
+        self.assertIn('origin is required', message)
+        self.assertNotIn('kakao-key', message)
+        self.assertNotIn(str(PARAMS['startX']), message)
+
+    def test_bad_request_explanation_is_truncated_and_ignores_non_strings(self):
+        self.failure = lambda req: httpx.Response(400, json={'msg': 'x' * 500, 'code': {'nested': 1}})
+        with self.client() as client:
+            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+        self.assertNotIn('x' * 161, message)
+        self.assertIn('x' * 160, message)
+
+    def test_request_style_post_json_sends_numbers_in_body(self):
+        # 문서가 POST JSON 본문을 요구하면 환경변수만으로 바꿀 수 있습니다.
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_request_style='post-json',
+                     kakao_walk_query='origin={sx},{sy}&destination={ex},{ey}'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            self.assertEqual(client.get('/api/compare', params=PARAMS).status_code, 200)
+        by_path = {r.url.path: r for r in self.calls}
+        transit = by_path['/v2/routing/publictraffic']
+        self.assertEqual(transit.method, 'POST')
+        self.assertEqual(transit.headers['content-type'], 'application/json')
+        self.assertEqual(json.loads(transit.content)['sx'], float(PARAMS['startX']))
+        walk = json.loads(by_path['/v2/routing/pedestrian'].content)
+        self.assertEqual(walk['origin'], f"{PARAMS['startX']},{PARAMS['startY']}")
+        self.assertEqual(str(transit.url.query, 'utf-8'), '')
+
+    def test_request_style_post_form_and_method_in_message(self):
+        self.failure = lambda req: httpx.Response(400)
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_request_style='post-form'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+        self.assertEqual(self.calls[0].method, 'POST')
+        self.assertIn('application/x-www-form-urlencoded', self.calls[0].headers['content-type'])
+        self.assertIn('POST dapi.kakao.com/v2/routing/pedestrian', message)
 
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
