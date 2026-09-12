@@ -178,6 +178,60 @@ class KakaoTests(unittest.TestCase):
                          ['https://dapi.kakao.com/v2/routing/pedestrian',
                           'https://dapi.kakao.com/v2/routing/publictraffic'])
 
+    def test_query_template_renames_parameters_without_code_change(self):
+        # 문서의 파라미터 이름이 다르면 환경변수 틀만 바꿔서 맞춥니다.
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_transit_query='origin={sx},{sy}&destination={ex},{ey}',
+                     kakao_walk_query='startX={sx}&startY={sy}&endX={ex}&endY={ey}'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            self.assertEqual(client.get('/api/compare', params=PARAMS).status_code, 200)
+        by_path = {r.url.path: dict(r.url.params) for r in self.calls}
+        transit = by_path['/v2/routing/publictraffic']
+        self.assertEqual(set(transit), {'origin', 'destination'})
+        self.assertEqual(transit['origin'], f"{PARAMS['startX']},{PARAMS['startY']}")
+        walk = by_path['/v2/routing/pedestrian']
+        self.assertEqual(set(walk), {'startX', 'startY', 'endX', 'endY'})
+
+    def test_bad_query_template_is_a_configuration_error(self):
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_walk_query='origin={nope}'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['error']['code'], 'SERVICE_NOT_CONFIGURED')
+
+    def test_html_page_from_wrong_host_is_explained(self):
+        # 문서 페이지 주소를 경로 환경변수에 넣으면 200 HTML 이 옵니다. 어디로 갔는지 알려 줍니다.
+        self.failure = lambda req: (
+            httpx.Response(200, headers={'content-type': 'text/html; charset=utf-8'},
+                           text='<html>secret-page-text</html>')
+            if req.url.host == 'developers.kakao.com'
+            else httpx.Response(200, json=copy.deepcopy(self.transit)))
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_walk_path='https://developers.kakao.com/docs/latest/ko/kakaomap/rest-api'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        message = response.json()['error']['message']
+        self.assertIn('developers.kakao.com/docs/latest/ko/kakaomap/rest-api', message)
+        self.assertIn('text/html', message)
+        self.assertIn('dapi.kakao.com', message)
+        self.assertNotIn('secret-page-text', message)
+
+    def test_http_error_names_the_requested_path(self):
+        self.failure = lambda req: httpx.Response(400)
+        with self.client() as client:
+            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+        self.assertIn('dapi.kakao.com/v2/routing/pedestrian', message)
+        self.assertIn('KAKAO_WALK_QUERY', message)
+        self.assertNotIn('kakao-key', message)
+
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
         self.transit = {'routes': [{'somethingElse': 1}]}

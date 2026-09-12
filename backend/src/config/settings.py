@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # 엔드포인트 경로. 문서 확인 후 다르면 배포 환경변수로만 고치면 됩니다.
     kakao_transit_path: str = '/v2/routing/publictraffic'
     kakao_walk_path: str = '/v2/routing/pedestrian'
+    # 요청 쿼리 틀. 문서의 파라미터 이름이 다르면 배포 환경변수로만 바꿉니다.
+    # {sx} {sy} {ex} {ey} 자리에 출발·도착 경도·위도가 들어갑니다.
+    # 예) origin={sx},{sy}&destination={ex},{ey}
+    kakao_transit_query: str = 'sx={sx}&sy={sy}&ex={ex}&ey={ey}'
+    kakao_walk_query: str = 'sx={sx}&sy={sy}&ex={ex}&ey={ey}'
 
     odsay_api_key: SecretStr = SecretStr('')
 

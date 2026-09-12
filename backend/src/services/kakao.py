@@ -20,6 +20,7 @@
 """
 
 from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 
@@ -51,8 +52,21 @@ SECONDS_THRESHOLD = 600
 # 상태 코드만 보고 바로 손댈 수 있는 원인. 메시지 끝에 붙습니다.
 STATUS_HINTS = {
     404: ' — 엔드포인트 경로가 다를 수 있습니다. KAKAO_WALK_PATH / KAKAO_TRANSIT_PATH 환경변수로 바꿀 수 있습니다',
-    400: ' — 요청 파라미터 이름이 다를 수 있습니다',
+    400: ' — 요청 파라미터 이름이 다를 수 있습니다. KAKAO_WALK_QUERY / KAKAO_TRANSIT_QUERY 환경변수로 바꿀 수 있습니다',
 }
+
+
+def build_query(template: str, sx, sy, ex, ey) -> dict[str, str]:
+    """'origin={sx},{sy}&destination={ex},{ey}' 같은 틀을 쿼리 딕셔너리로 바꿉니다.
+
+    파라미터 이름을 문서에 맞추는 일을 코드 수정 없이 환경변수만으로 끝내기 위해서입니다.
+    """
+    try:
+        filled = template.format(sx=sx, sy=sy, ex=ex, ey=ey)
+    except (KeyError, IndexError, ValueError):
+        raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
+                       'KAKAO_*_QUERY 틀에는 {sx} {sy} {ex} {ey} 자리만 쓸 수 있습니다') from None
+    return dict(parse_qsl(filled, keep_blank_values=True))
 
 
 def pick(source: Any, keys: tuple[str, ...]) -> Any:
@@ -166,6 +180,8 @@ class KakaoRouting:
             raise ApiError(502, 'UPSTREAM_ERROR',
                            f'카카오 {what} 경로 조회 서비스에 연결하지 못했습니다') from exc
 
+        target = httpx.URL(url)
+        where = f'{target.host}{target.path}'  # 쿼리(좌표)와 키(헤더)는 담지 않습니다.
         status = response.status_code
         if status in (401, 403):
             raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
@@ -174,13 +190,17 @@ class KakaoRouting:
             raise ApiError(429, 'RATE_LIMITED', '호출 한도를 초과했습니다. 잠시 후 다시 시도하세요')
         if status >= 400:
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회가 실패했습니다 (카카오 응답 상태: {status}'
+                           f'카카오 {what} 경로 조회가 실패했습니다 (요청: {where}, 카카오 응답 상태: {status}'
                            f'{STATUS_HINTS.get(status, "")})')
         try:
             data = response.json()
         except ValueError as exc:
+            kind = response.headers.get('content-type', '').split(';')[0].strip() or '알 수 없음'
+            hint = ('' if target.host == 'dapi.kakao.com' else
+                    ' — 문서 페이지 주소가 아니라 dapi.kakao.com 으로 시작하는 API 요청 URL 이어야 합니다')
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회 응답을 JSON 으로 읽지 못했습니다 (상태: {status})') from exc
+                           f'카카오 {what} 경로 조회 응답이 JSON 이 아닙니다 '
+                           f'(요청: {where}, 상태: {status}, 형식: {kind}){hint}') from exc
         if not isinstance(data, dict):
             raise ApiError(502, 'UPSTREAM_ERROR',
                            f'카카오 {what} 경로 조회 응답 형식이 예상과 다릅니다 ({type(data).__name__})')
@@ -194,7 +214,7 @@ class KakaoRouting:
 
     async def transit(self, sx, sy, ex, ey) -> Transit:
         data = await self.request('대중교통', self.settings.kakao_transit_path,
-                                  {'sx': sx, 'sy': sy, 'ex': ex, 'ey': ey})
+                                  build_query(self.settings.kakao_transit_query, sx, sy, ex, ey))
         route = first_route(data)
         if route is None:
             raise no_route()
@@ -213,7 +233,7 @@ class KakaoRouting:
 
     async def walk(self, sx, sy, ex, ey) -> Walk:
         data = await self.request('도보', self.settings.kakao_walk_path,
-                                  {'sx': sx, 'sy': sy, 'ex': ex, 'ey': ey})
+                                  build_query(self.settings.kakao_walk_query, sx, sy, ex, ey))
         route = first_route(data)
         if route is None:
             raise no_route()
