@@ -57,11 +57,19 @@ class Recommendation(BaseModel):
     reason: str
 
 
+class WeatherInfo(BaseModel):
+    condition: str
+    temperatureC: float | None = None
+    precipitationProbability: float | None = None
+
+
 class CompareResponse(BaseModel):
     walk: Walk
     transit: Transit
     savings: Savings
     recommendation: Recommendation
+    # 현재는 UI 확인용 임시 날씨 정보입니다.
+    weather: WeatherInfo | None = None
 
 
 class ApiError(Exception):
@@ -410,4 +418,5 @@ def build_comparison(walk: Walk, transit: Transit, settings: Settings) -> Compar
         walk=walk, transit=transit,
         savings=Savings(amount=transit.fare, extraMinutes=extra),
         recommendation=Recommendation(choice=choice, reason=reason),
+        weather=WeatherInfo(condition='맑음', temperatureC=23, precipitationProbability=10),
     )

@@ -67,6 +67,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
   }
   const { walk, transit, savings, recommendation } = data
   const weather = data.weather
+  const isMobile = window.matchMedia('(max-width: 860px)').matches
   const walkRecommended = recommendation.choice === 'walk'
 
   return (
@@ -140,7 +141,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
         </span>
       </p>
 
-      {expanded && weather && (
+      {(expanded || !isMobile) && weather && (
         <div className="weather-summary">
           {weather.iconUrl ? (
             <img src={weather.iconUrl} alt="" />
@@ -184,12 +185,12 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
 
         {detailTab === 'comparison' ? (
           <article
-            className={`compare-card card-transit ${walkRecommended ? '' : 'is-recommended'} ${expanded ? 'is-clickable' : ''}`}
-            role={expanded ? 'button' : undefined}
-            tabIndex={expanded ? 0 : undefined}
-            onClick={() => { if (expanded) setDetailTab('transit') }}
+            className={`compare-card card-transit ${walkRecommended ? '' : 'is-recommended'} is-clickable`}
+            role="button"
+            tabIndex={0}
+            onClick={() => setDetailTab('transit')}
             onKeyDown={(event) => {
-              if (expanded && (event.key === 'Enter' || event.key === ' ')) {
+              if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
                 setDetailTab('transit')
               }
@@ -216,7 +217,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
                 </dd>
               </div>
             </dl>
-            {expanded && <small className="transit-card-hint">눌러서 경로 보기</small>}
+            <small className="transit-card-hint">눌러서 경로 보기</small>
           </article>
         ) : (
           <div
