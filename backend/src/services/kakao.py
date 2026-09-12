@@ -12,9 +12,9 @@
 
 응답 형식에 대해
 ----------------
-공식 문서를 확인하지 못한 채 작성했습니다. 그래서 필드를 하나의 이름으로 단정하지 않고
-`pick()` 으로 여러 후보 이름을 훑습니다. 실제 응답을 한 번 받아 보고
-아래 *_KEYS 목록에 진짜 이름을 넣으면 그때부터 정확히 동작합니다.
+카카오맵 REST 공식 응답의 route/properties 및 steps/path 구조를 읽습니다.
+properties.totalTime은 초 단위이며 분으로 변환합니다.
+기존 응답 형식은 후보 필드 이름을 통해 호환합니다.
 해석에 실패하면 응답의 최상위 키 목록을 담은 UPSTREAM_ERROR 를 던지므로,
 서버 로그나 화면 메시지를 보고 어떤 이름인지 바로 알 수 있습니다.
 """
@@ -42,7 +42,7 @@ DURATION_KEYS = ('duration', 'totalTime', 'total_time', 'time', 'sectionTime')
 DISTANCE_KEYS = ('distance', 'totalDistance', 'total_distance', 'length')
 FARE_KEYS = ('fare', 'payment', 'totalFare', 'total_fare', 'price', 'charge')
 TRANSFER_KEYS = ('transfers', 'transferCount', 'transfer_count', 'transitCount')
-ROUTES_KEYS = ('routes', 'paths', 'path', 'result', 'documents')
+ROUTES_KEYS = ('route', 'routes', 'paths', 'path', 'result', 'documents')
 SECTIONS_KEYS = ('sections', 'subPath', 'sub_path', 'steps', 'legs')
 POINTS_KEYS = ('points', 'vertexes', 'vertices', 'graphPos', 'coordinates', 'polyline')
 
@@ -157,7 +157,7 @@ def unwrap_number(value: Any, depth: int = 2) -> float | None:
 
 def find_number(route: Any, data: Any, keys: tuple[str, ...]) -> float | None:
     """경로 객체 → 그 안의 summary → 응답 최상위 properties 순서로 숫자를 찾습니다."""
-    holders = (route, pick(route, ('summary', 'info', 'total')),
+    holders = (pick(route, ('properties',)), route, pick(route, ('summary', 'info', 'total')),
                pick(data, ('properties', 'summary')))
     for holder in holders:
         number = unwrap_number(pick(holder, keys))
@@ -215,6 +215,10 @@ def parse_points(value: Any) -> list[Point]:
 
 def parse_paths(route: Any) -> list[list[Point]]:
     """구간별 좌표 묶음. 끊긴 구간을 잇지 않도록 구간마다 따로 담습니다."""
+    # 공식 응답: 도보는 legs[].steps[], 대중교통은 steps[].path.points.
+    # 각 단계의 선을 따로 유지하여 떨어진 구간을 직선으로 잇지 않습니다.
+    if isinstance(route, dict) and isinstance(route.get('properties'), dict):
+        return official_paths(route)
     sections = pick(route, SECTIONS_KEYS)
     paths: list[list[Point]] = []
     if isinstance(sections, list):
@@ -230,6 +234,28 @@ def parse_paths(route: Any) -> list[list[Point]]:
         return paths
     points = parse_points(pick(route, POINTS_KEYS))
     return [points] if len(points) >= 2 else []
+
+
+def official_paths(route: dict) -> list[list[Point]]:
+    paths = []
+    points = parse_points(pick(pick(route, ('path',)), ('points',)))
+    if len(points) >= 2:
+        paths.append(points)
+    for key in ('legs', 'steps'):
+        children = route.get(key)
+        if isinstance(children, list):
+            for child in children:
+                if isinstance(child, dict):
+                    paths.extend(official_paths(child))
+    return paths
+
+
+def route_minutes(route: Any, data: Any) -> float | None:
+    properties = pick(route, ('properties',))
+    if isinstance(properties, dict):
+        seconds = as_number(properties.get('totalTime'))
+        return seconds / 60 if seconds is not None and seconds >= 0 else None
+    return to_minutes(find_number(route, data, DURATION_KEYS))
 
 
 def first_route(data: Any) -> Any:
@@ -338,13 +364,20 @@ class KakaoRouting:
         route = first_route(data)
         if route is None:
             raise no_route_in('대중교통', data)
-        duration = to_minutes(find_number(route, data, DURATION_KEYS))
+        duration = route_minutes(route, data)
         fare = find_number(route, data, FARE_KEYS)
         if duration is None or fare is None:
             raise shape_error('대중교통 경로', data)
         transfers = find_number(route, data, TRANSFER_KEYS) or 0
         walk_distance = find_number(route, data, ('totalWalk', 'walkDistance', 'walk_distance')) or 0
         walk_duration = to_minutes(find_number(route, data, ('totalWalkTime', 'walkTime', 'walk_time'))) or 0
+        if isinstance(route.get('properties'), dict):
+            steps = route.get('steps')
+            walking = [step['properties'] for step in steps
+                       if isinstance(step, dict) and isinstance(step.get('properties'), dict)
+                       and step['properties'].get('type') == 'WALK'] if isinstance(steps, list) else []
+            walk_distance = sum(max(0, as_number(step.get('distance')) or 0) for step in walking)
+            walk_duration = sum(max(0, as_number(step.get('time')) or 0) for step in walking) / 60
         return Transit(
             duration=duration, fare=int(fare), transfers=int(max(0, transfers)),
             walkDistance=max(0.0, walk_distance), walkDuration=max(0.0, walk_duration),
@@ -357,7 +390,7 @@ class KakaoRouting:
         if route is None:
             raise no_route_in('도보', data)
         distance = find_number(route, data, DISTANCE_KEYS)
-        duration = to_minutes(find_number(route, data, DURATION_KEYS))
+        duration = route_minutes(route, data)
         if distance is None or duration is None:
             raise shape_error('도보 경로', data)
         return Walk(distance=max(0.0, distance), duration=max(0.0, duration),
