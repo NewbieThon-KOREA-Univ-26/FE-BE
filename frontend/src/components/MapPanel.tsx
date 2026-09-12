@@ -67,25 +67,92 @@ export function MapPanel({ start, end }: Props) {
     if (points.length === 0) {
       return
     }
-    const bounds = new kakao.maps.LatLngBounds()
     for (const point of points) {
       const position = new kakao.maps.LatLng(point.y, point.x)
       markersRef.current.push(new kakao.maps.Marker({ position, map }))
-      bounds.extend(position)
     }
-    if (points.length === 1) {
-      map.setCenter(new kakao.maps.LatLng(points[0]!.y, points[0]!.x))
-      map.setLevel(4)
-    } else {
-      // 왼쪽 검색 패널 아래로 마커가 숨지 않도록 지도 범위에 패널 너비만큼 여백을 둡니다.
-      const isMobile = window.matchMedia('(max-width: 860px)').matches
-      map.setBounds(
-        bounds,
-        isMobile ? Math.round(window.innerHeight * 0.55) : 40,
-        isMobile ? 40 : 40,
-        isMobile ? Math.round(window.innerHeight * 0.44) : 40,
-        isMobile ? 40 : 460,
-      )
+    const layout = containerRef.current?.closest('.app-main')
+    const panel = layout?.querySelector<HTMLElement>('.panel-side')
+    if (!panel) return
+    let frame = 0
+    let lastLayout = ''
+    const fitMap = () => {
+      const canvas = containerRef.current
+      if (!canvas) return
+      const rect = canvas.getBoundingClientRect()
+      const mobile = window.matchMedia('(max-width: 860px)').matches
+      let top = 40
+      let bottom = 24
+      let left = 24
+      const right = 24
+      if (mobile) {
+        const searchElement = panel.querySelector<HTMLElement>('.search-panel')
+        const result = panel.querySelector<HTMLElement>('.result')
+        const panelTop = panel.getBoundingClientRect().top
+        // transform 애니메이션 중의 위치 대신 전환이 끝날 레이아웃 위치로 한 번만 맞춥니다.
+        const searchVisible = !result?.classList.contains('is-search-hidden')
+        top = searchElement && searchVisible
+          ? Math.max(40, panelTop + searchElement.offsetTop + searchElement.offsetHeight - rect.top + 40)
+          : 40
+        if (result) {
+          const resultTop = result.classList.contains('is-expanded')
+            ? result.offsetTop
+            : panelTop + result.offsetTop
+          bottom = Math.max(24, rect.bottom - resultTop + 24)
+        }
+        // 작은 화면/키보드에서도 여백이 지도 높이를 모두 차지하지 않도록 제한합니다.
+        const availablePadding = Math.max(0, rect.height - 120)
+        if (top + bottom > availablePadding) {
+          const scale = availablePadding / (top + bottom)
+          top *= scale
+          bottom *= scale
+        }
+      } else {
+        left = panel.getBoundingClientRect().right - rect.left + 40
+      }
+      const layoutKey = [rect.width, rect.height, top, right, bottom, left].map(Math.round).join(',')
+      if (layoutKey === lastLayout) return
+      lastLayout = layoutKey
+      // 실제 지도를 이동시키지 않고 현재 투영 좌표에서 목표 배율과 중심을 계산합니다.
+      const projection = map.getProjection()
+      const pixels = points.map((point) => projection.containerPointFromCoords(new kakao.maps.LatLng(point.y, point.x)))
+      const minX = Math.min(...pixels.map((point) => point.x))
+      const maxX = Math.max(...pixels.map((point) => point.x))
+      const minY = Math.min(...pixels.map((point) => point.y))
+      const maxY = Math.max(...pixels.map((point) => point.y))
+      const currentLevel = map.getLevel()
+      const ratio = Math.max((maxX - minX) / Math.max(1, rect.width - left - right),
+        (maxY - minY) / Math.max(1, rect.height - top - bottom))
+      const nextLevel = points.length === 1 || ratio === 0 ? 4
+        : Math.max(1, Math.min(14, currentLevel + Math.ceil(Math.log2(ratio))))
+      const scale = 2 ** (nextLevel - currentLevel)
+      const center = projection.coordsFromContainerPoint(new kakao.maps.Point(
+        (minX + maxX) / 2 + (right - left) * scale / 2,
+        (minY + maxY) / 2 + (bottom - top) * scale / 2,
+      ))
+      map.jump(center, nextLevel, {
+        animate: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 320 },
+      })
+    }
+    const scheduleFit = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(fitMap)
+    }
+    const resize = new ResizeObserver(scheduleFit)
+    resize.observe(containerRef.current!)
+    const observePanels = () => {
+      for (const element of panel.querySelectorAll('.search-panel, .result')) resize.observe(element)
+      scheduleFit()
+    }
+    const changes = new MutationObserver(observePanels)
+    changes.observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+    observePanels()
+    window.addEventListener('resize', scheduleFit)
+    return () => {
+      cancelAnimationFrame(frame)
+      resize.disconnect()
+      changes.disconnect()
+      window.removeEventListener('resize', scheduleFit)
     }
   }, [start, end, status])
 

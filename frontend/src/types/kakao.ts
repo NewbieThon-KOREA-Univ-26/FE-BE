@@ -13,6 +13,13 @@ export interface KakaoLatLngBounds {
 }
 
 export interface KakaoMap {
+  getProjection(): {
+    containerPointFromCoords(coords: KakaoLatLng): { x: number; y: number }
+    coordsFromContainerPoint(point: { x: number; y: number }): KakaoLatLng
+  }
+  getCenter(): KakaoLatLng
+  getLevel(): number
+  jump(center: KakaoLatLng, level: number, options?: { animate: boolean | { duration: number } }): void
   setCenter(latlng: KakaoLatLng): void
   panBy(dx: number, dy: number): void
   setBounds(bounds: KakaoLatLngBounds, paddingTop?: number, paddingRight?: number, paddingBottom?: number, paddingLeft?: number): void
@@ -42,6 +49,7 @@ export interface KakaoPlacesService {
 
 export interface KakaoSdk {
   maps: {
+    Point: new (x: number, y: number) => { x: number; y: number }
     load(callback: () => void): void
     LatLng: new (lat: number, lng: number) => KakaoLatLng
     LatLngBounds: new () => KakaoLatLngBounds
