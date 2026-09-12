@@ -41,6 +41,11 @@ export async function getJson<T>(
     throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0)
   }
 
+  return readJsonOrThrow<T>(response)
+}
+
+/** 응답을 JSON 으로 읽고, 실패 응답이면 ApiError 로 바꿉니다. */
+async function readJsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let body: { error?: { code?: string; message?: string } } | undefined
     try {
@@ -57,6 +62,25 @@ export async function getJson<T>(
       response.status,
     )
   }
-
   return (await response.json()) as T
+}
+
+/**
+ * 백엔드에 POST 요청을 보내고 JSON 을 돌려줍니다.
+ *
+ * 좌표를 본문에 싣는 이유는, 배포 프록시가 쿼리스트링이나 경로 뒷부분을
+ * 백엔드까지 넘기지 않는 경우가 있기 때문입니다. 본문은 그 영향을 받지 않습니다.
+ */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0)
+  }
+  return readJsonOrThrow<T>(response)
 }

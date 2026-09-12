@@ -8,6 +8,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
+from pydantic import BaseModel, Field
 
 from src.config.settings import Settings
 from src.services.compare import ApiError, CompareResponse, Odsay
@@ -82,7 +83,8 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
         return JSONResponse(status_code=400, content={'error': {
             'code': 'INVALID_INPUT',
             'message': ('유효한 출발지·도착지 경도와 위도를 입력하세요 '
-                        f'(받은 항목: {received} / 문제 항목: {", ".join(missing) or "없음"})'),
+                        f'(받은 경로: {request.url.path} / 받은 항목: {received} / '
+                        f'문제 항목: {", ".join(missing) or "없음"})'),
         }})
 
     @app.exception_handler(Exception)
@@ -176,6 +178,22 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
         if not (math.isfinite(x) and math.isfinite(y)) or abs(x) > 180 or abs(y) > 90:
             raise ApiError(400, 'INVALID_INPUT', f'{label} 좌표가 범위를 벗어났습니다')
         return x, y
+
+    class ComparePoint(BaseModel):
+        x: Annotated[float, Field(ge=-180, le=180, allow_inf_nan=False)]
+        y: Annotated[float, Field(ge=-90, le=90, allow_inf_nan=False)]
+
+    class CompareRequest(BaseModel):
+        start: ComparePoint
+        end: ComparePoint
+
+    # 좌표를 요청 본문으로 받습니다.
+    #
+    # 배포 프록시가 쿼리스트링이나 경로 뒷부분을 넘기지 않는 경우가 있습니다.
+    # 본문은 그런 영향을 받지 않으므로 프론트는 이 방식을 먼저 씁니다.
+    @app.post('/api/compare', response_model=CompareResponse, response_model_exclude_none=True)
+    async def compare_by_body(request: Request, body: CompareRequest):
+        return await run_compare(request, body.start.x, body.start.y, body.end.x, body.end.y)
 
     # 같은 비교를 경로(path)로도 받습니다.
     #

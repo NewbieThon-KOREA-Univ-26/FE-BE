@@ -220,3 +220,46 @@ class PathParameterTests(KakaoTests):
         with self.client() as client:
             body = client.get('/api/compare').json()
         self.assertIn('받은 항목: 없음', body['error']['message'])
+
+
+class BodyParameterTests(KakaoTests):
+    """좌표를 요청 본문으로 받는 방식.
+
+    배포 프록시가 쿼리스트링이나 경로 뒷부분을 넘기지 않는 경우가 있어 추가했습니다.
+    본문은 그 영향을 받지 않습니다.
+    """
+
+    BODY = {'start': {'x': 127.0276, 'y': 37.4979}, 'end': {'x': 127.04, 'y': 37.51}}
+
+    def test_body_form_matches_query_form(self):
+        with self.client() as client:
+            by_query = client.get('/api/compare', params=PARAMS).json()
+            by_body = client.post('/api/compare', json=self.BODY).json()
+        self.assertEqual(by_query, by_body)
+
+    def test_same_location_is_rejected(self):
+        same = {'start': {'x': 127.0, 'y': 37.5}, 'end': {'x': 127.0, 'y': 37.5}}
+        with self.client() as client:
+            self.assertEqual(client.post('/api/compare', json=same).json()['error']['code'],
+                             'SAME_LOCATION')
+
+    def test_bad_bodies_are_invalid_input(self):
+        bad = [
+            {},
+            {'start': {'x': 127.0, 'y': 37.5}},
+            {'start': {'x': 999, 'y': 37.5}, 'end': {'x': 127.0, 'y': 37.5}},
+            {'start': {'x': 127.0, 'y': 99}, 'end': {'x': 127.0, 'y': 37.5}},
+            {'start': {'x': 'abc', 'y': 37.5}, 'end': {'x': 127.0, 'y': 37.5}},
+        ]
+        with self.client() as client:
+            for body in bad:
+                response = client.post('/api/compare', json=body)
+                self.assertEqual(response.status_code, 400, body)
+                self.assertEqual(response.json()['error']['code'], 'INVALID_INPUT', body)
+        self.assertEqual(self.calls, [])
+
+    def test_validation_error_names_the_path_it_received(self):
+        # 배포에서 경로가 잘리는지 판단할 수 있도록 받은 경로를 함께 알려 줍니다.
+        with self.client() as client:
+            message = client.get('/api/compare').json()['error']['message']
+        self.assertIn('받은 경로: /api/compare', message)
