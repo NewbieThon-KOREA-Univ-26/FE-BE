@@ -70,7 +70,7 @@ export default function App() {
             <header className="app-header">
               <div>
                 <img className="brand-logo" src="/logo.png" alt="이 정도면… 걸을만한데?" />
-                <p>한 정거장 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
+                <p>애매한 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
               </div>
             </header>
             <SavingsTotalBadge total={total} onReset={resetTotal} />
