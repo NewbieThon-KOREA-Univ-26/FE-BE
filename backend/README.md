@@ -74,6 +74,9 @@ SESSION_COOKIE_SECURE=false
 KAKAO_TRANSIT_QUERY=origin={sx},{sy}&destination={ex},{ey}
 ```
 
+파라미터를 쿼리스트링이 아니라 POST 본문으로 보내야 하면 `KAKAO_REQUEST_STYLE` 을
+`post-json` 또는 `post-form` 으로 둡니다 (기본값 `get`).
+
 오류 메시지에는 요청한 호스트·경로와 카카오 응답 상태 코드가 담기므로,
 경로·파라미터 중 무엇이 틀렸는지 화면에서 바로 알 수 있습니다.
 

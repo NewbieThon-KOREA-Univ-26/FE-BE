@@ -69,6 +69,40 @@ def build_query(template: str, sx, sy, ex, ey) -> dict[str, str]:
     return dict(parse_qsl(filled, keep_blank_values=True))
 
 
+def upstream_detail(response: httpx.Response, key: str) -> str:
+    """4xx 본문에서 카카오가 준 코드와 설명만 골라 담습니다.
+
+    "어떤 파라미터가 필요하다" 같은 설명이 원인을 바로 알려 주기 때문입니다.
+    키가 섞여 있으면 지우고, 길이를 제한하고, 문자열이 아닌 값은 버립니다.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        return ''
+    if not isinstance(body, dict):
+        return ''
+    parts = []
+    code = body.get('code', body.get('errorType'))
+    if code is not None:
+        parts.append(f'코드 {str(code)[:40]}')
+    msg = body.get('msg') or body.get('message') or body.get('errorMessage')
+    if isinstance(msg, str) and msg.strip():
+        text = msg.strip().replace(key, '***') if key else msg.strip()
+        parts.append(text[:160])
+    return f', 카카오 설명: {" · ".join(parts)}' if parts else ''
+
+
+def json_ready(params: dict[str, str]) -> dict[str, Any]:
+    """JSON 본문으로 보낼 때 숫자처럼 생긴 값은 숫자로 바꿉니다. '127.0,37.5' 같은 값은 그대로 둡니다."""
+    out: dict[str, Any] = {}
+    for name, value in params.items():
+        try:
+            out[name] = float(value) if '.' in value else int(value)
+        except ValueError:
+            out[name] = value
+    return out
+
+
 def pick(source: Any, keys: tuple[str, ...]) -> Any:
     """딕셔너리에서 후보 이름 중 먼저 발견되는 값을 돌려줍니다."""
     if not isinstance(source, dict):
@@ -166,13 +200,16 @@ class KakaoRouting:
                            '서버의 카카오 REST API 키가 설정되지 않았습니다')
         # 환경변수로 바꿀 때 전체 URL 을 넣거나 앞 슬래시를 빼도 되게 합니다.
         url = path if path.startswith(('http://', 'https://')) else f"{KAKAO_HOST}/{path.lstrip('/')}"
+        style = self.settings.kakao_request_style
+        headers = {'Authorization': f'KakaoAK {key}'}
+        timeout = self.settings.upstream_timeout_seconds
         try:
-            response = await self.client.get(
-                url,
-                params=params,
-                headers={'Authorization': f'KakaoAK {key}'},
-                timeout=self.settings.upstream_timeout_seconds,
-            )
+            if style == 'post-json':
+                response = await self.client.post(url, json=json_ready(params), headers=headers, timeout=timeout)
+            elif style == 'post-form':
+                response = await self.client.post(url, data=params, headers=headers, timeout=timeout)
+            else:
+                response = await self.client.get(url, params=params, headers=headers, timeout=timeout)
         except httpx.TimeoutException as exc:
             raise ApiError(502, 'UPSTREAM_ERROR',
                            f'카카오 {what} 경로 조회 응답 시간이 초과되었습니다. 다시 시도해 주세요') from exc
@@ -181,7 +218,8 @@ class KakaoRouting:
                            f'카카오 {what} 경로 조회 서비스에 연결하지 못했습니다') from exc
 
         target = httpx.URL(url)
-        where = f'{target.host}{target.path}'  # 쿼리(좌표)와 키(헤더)는 담지 않습니다.
+        method = 'GET' if style == 'get' else 'POST'
+        where = f'{method} {target.host}{target.path}'  # 쿼리(좌표)와 키(헤더)는 담지 않습니다.
         status = response.status_code
         if status in (401, 403):
             raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
@@ -189,8 +227,10 @@ class KakaoRouting:
         if status == 429:
             raise ApiError(429, 'RATE_LIMITED', '호출 한도를 초과했습니다. 잠시 후 다시 시도하세요')
         if status >= 400:
+            sent = ', '.join(params) or '없음'  # 이름만 담습니다. 값(좌표)은 담지 않습니다.
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회가 실패했습니다 (요청: {where}, 카카오 응답 상태: {status}'
+                           f'카카오 {what} 경로 조회가 실패했습니다 (요청: {where}, 보낸 파라미터: {sent}, '
+                           f'카카오 응답 상태: {status}{upstream_detail(response, key)}'
                            f'{STATUS_HINTS.get(status, "")})')
         try:
             data = response.json()
