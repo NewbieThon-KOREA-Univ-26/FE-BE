@@ -46,6 +46,42 @@ npm run dev
 
 환경변수를 바꾼 뒤에는 **재배포해야** `VITE_` 값이 반영됩니다.
 
+## 백엔드를 Render 에 배포하기
+
+저장소 루트의 `render.yaml` 이 설정을 담고 있습니다. Render 대시보드에서 Blueprint 로
+이 저장소를 연결하면 그대로 만들어집니다. 손으로 서비스를 만들었다면 Settings 를
+아래와 같이 맞추세요.
+
+| 항목 | 값 |
+| --- | --- |
+| Root Directory | `backend` |
+| Build Command | `pip install -r requirements.txt` |
+| Start Command | `uvicorn main:app --host 0.0.0.0 --port $PORT` |
+| Health Check Path | `/api/health` |
+
+**Start Command 가 가장 자주 틀리는 부분입니다.** `--host 0.0.0.0` 이 없거나 포트를
+`8000` 처럼 고정하면 Render 가 트래픽을 보내지 못해 요청이 404 로 떨어집니다.
+이때 응답 헤더에 `x-render-routing: no-server` 가 붙습니다. CORS 문제로 보이지만
+실제로는 서비스가 떠 있지 않은 것입니다.
+
+환경변수는 대시보드에 넣습니다.
+
+| 변수 | 값 |
+| --- | --- |
+| `KAKAO_REST_API_KEY` | 카카오 REST API 키 |
+| `CORS_ORIGINS` | `https://walkride-fe.vercel.app,http://localhost:5173` |
+
+`CORS_ORIGINS` 는 쉼표 구분과 JSON 배열을 모두 받습니다.
+
+그다음 프론트(Vercel) 프로젝트에 백엔드 주소를 넣고 재배포합니다.
+
+```
+VITE_API_BASE_URL=https://walkride-api.onrender.com
+```
+
+> Render 무료 요금제는 접속이 없으면 서비스를 내립니다. 다시 깨어나는 데 1분쯤
+> 걸리므로 첫 요청이 느릴 수 있습니다. 발표 직전에 한 번 열어 두세요.
+
 ## 백엔드를 따로 배포하기 (라우팅이 계속 막힐 때)
 
 Vercel Services 는 Beta 라서 `/api/*` 로 보낸 경로와 쿼리가 백엔드까지 전달되지 않는

@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -29,6 +29,24 @@ class Settings(BaseSettings):
     session_secret_key: SecretStr = SecretStr('')
     session_cookie_secure: bool = False
     upstream_timeout_seconds: float = Field(default=10, gt=0)
-    cors_origins: list[str] = ['http://localhost:5173']
+    # NoDecode 를 붙여야 환경변수 문자열이 JSON 으로 먼저 해석되지 않습니다.
+    # 그래야 아래 검사기에서 쉼표 구분과 JSON 배열을 모두 받을 수 있습니다.
+    cors_origins: Annotated[list[str], NoDecode] = ['http://localhost:5173']
+
+    @field_validator('cors_origins', mode='before')
+    @classmethod
+    def _read_origins(cls, value):
+        """허용 출처를 쉼표 구분 문자열이나 JSON 배열로 받습니다.
+
+        JSON 형식만 받으면 CORS_ORIGINS=https://example.com 처럼 적었을 때
+        서버가 아예 뜨지 않습니다. 배포에서 자주 걸리는 부분이라 둘 다 받습니다.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith('['):
+            import json
+            return json.loads(text)
+        return [part.strip() for part in text.split(',') if part.strip()]
     walk_max_minutes: float = Field(default=30, gt=0)
     walk_max_meters: float = Field(default=2000, gt=0)
