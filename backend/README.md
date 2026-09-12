@@ -40,6 +40,27 @@ API 키를 담은 `.env`와 `.venv`는 Git에서 제외합니다.
 - 비교: `GET /api/compare?startX=127.0276&startY=37.4979&endX=127.04&endY=37.51`
 - 프론트 `.env`에서 `VITE_USE_MOCK=false`로 설정하면 실제 백엔드를 호출합니다.
 
+## 카카오 로그인
+
+카카오 로그인은 이 백엔드가 인가 코드 교환과 서비스 세션 생성을 처리합니다. `backend/.env`에
+아래 값을 채우고, 카카오 개발자 콘솔에서 카카오 로그인을 활성화합니다.
+
+```env
+KAKAO_REST_API_KEY=카카오_REST_API_키
+KAKAO_CLIENT_SECRET=카카오_클라이언트_시크릿
+KAKAO_REDIRECT_URI=http://localhost:8000/api/auth/kakao/callback
+FRONTEND_URL=http://localhost:5173
+SESSION_SECRET_KEY=충분히_긴_무작위_문자열
+SESSION_COOKIE_SECURE=false
+```
+
+- 카카오 로그인 Redirect URI에는 `KAKAO_REDIRECT_URI`와 정확히 같은 주소를 등록합니다.
+- 카카오 앱의 클라이언트 시크릿이 활성화되어 있으면 `KAKAO_CLIENT_SECRET`도 필수입니다.
+- 배포에서는 `KAKAO_REDIRECT_URI`, `FRONTEND_URL`, `CORS_ORIGINS`를 실제 HTTPS 주소로 바꾸고
+  `SESSION_COOKIE_SECURE=true`로 설정합니다.
+- `GET /api/auth/kakao/login`, `GET /api/auth/me`, `POST /api/auth/logout`을 제공합니다.
+  로그인 완료 후에는 카카오 액세스 토큰이 아니라 7일짜리 HttpOnly 서비스 세션 쿠키만 저장합니다.
+
 ## 비교 정책 및 응답
 
 카카오맵 REST API의 대중교통 경로 조회와 도보 경로 조회를 호출합니다.
