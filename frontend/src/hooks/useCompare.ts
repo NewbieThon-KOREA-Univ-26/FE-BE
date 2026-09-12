@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { fetchCompare } from '../api/compare'
 import { ApiError } from '../api/client'
+import { MAX_COMPARE_KM, distanceKm } from '../lib/geo'
 import type { Coordinate, CompareResponse } from '../types/api'
 
 export type CompareState =
@@ -19,6 +20,16 @@ export function useCompare() {
 
   const run = useCallback(async (start: Coordinate, end: Coordinate) => {
     const id = ++requestId.current
+    // 너무 먼 구간은 서버에 묻지 않고 바로 알립니다. 서버도 같은 기준으로 한 번 더 막습니다.
+    const km = distanceKm(start, end)
+    if (km > MAX_COMPARE_KM) {
+      setState({
+        status: 'error',
+        error: new ApiError('TOO_FAR',
+          `출발지와 도착지가 약 ${Math.round(km)}km 떨어져 있어요. ${MAX_COMPARE_KM}km 이내 구간만 비교할 수 있습니다`, 400),
+      })
+      return
+    }
     setState({ status: 'loading' })
     try {
       const data = await fetchCompare(start, end)

@@ -61,3 +61,5 @@ class Settings(BaseSettings):
         return [part.strip() for part in text.split(',') if part.strip()]
     walk_max_minutes: float = Field(default=30, gt=0)
     walk_max_meters: float = Field(default=2000, gt=0)
+    # 이보다 먼 구간은 조회하지 않습니다. 카카오 도보 경로가 약 30km 를 넘으면 결과를 주지 않습니다.
+    max_distance_km: float = Field(default=30, gt=0)

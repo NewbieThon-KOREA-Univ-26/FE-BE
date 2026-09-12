@@ -33,6 +33,8 @@ class TransitRouteStep(BaseModel):
     lineName: str | None = None
     fromName: str | None = None
     toName: str | None = None
+    # '인천공항2터미널 방면' 처럼 타는 방향. 제공자가 주지 않으면 비웁니다.
+    direction: str | None = None
 
 
 class Transit(Geometry):
@@ -70,6 +72,14 @@ class CompareResponse(BaseModel):
     recommendation: Recommendation
     # 현재는 UI 확인용 임시 날씨 정보입니다.
     weather: WeatherInfo | None = None
+
+
+def distance_km(sx: float, sy: float, ex: float, ey: float) -> float:
+    """두 좌표(경도, 위도) 사이의 직선 거리(km). 하버사인 공식."""
+    from math import asin, cos, radians, sin, sqrt
+    lon1, lat1, lon2, lat2 = map(radians, (sx, sy, ex, ey))
+    h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(h))
 
 
 class ApiError(Exception):
