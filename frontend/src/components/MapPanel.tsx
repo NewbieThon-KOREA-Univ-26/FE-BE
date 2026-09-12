@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { hasKakaoKey, loadKakaoSdk } from '../lib/kakao'
-import type { KakaoMap, KakaoMarker } from '../types/kakao'
+import type { KakaoMap, KakaoMarker, KakaoPolyline } from '../types/kakao'
+import type { CompareResponse } from '../types/api'
 import type { Place } from '../types/place'
 
 interface Props {
   start: Place | null
   end: Place | null
+  data: CompareResponse | null
 }
 
 /** 지도 첫 화면 중심. 서울시청 부근. */
@@ -13,9 +15,9 @@ const DEFAULT_CENTER = { x: 126.978, y: 37.5665 }
 
 /**
  * 오른쪽 지도 영역. 카카오 키가 있으면 지도를 띄우고 출발지·도착지 마커를 찍습니다.
- * 경로 선(스케치의 빨간 도보 / 파란 대중교통)은 백엔드 응답에 경로 좌표가 없어서 아직 그리지 않습니다.
+ * 응답의 실제 좌표로 도보 및 대중교통 경로를 구간별로 표시합니다.
  */
-export function MapPanel({ start, end }: Props) {
+export function MapPanel({ start, end, data }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<KakaoMap | null>(null)
   const markersRef = useRef<KakaoMarker[]>([])
@@ -73,6 +75,20 @@ export function MapPanel({ start, end }: Props) {
       markersRef.current.push(new kakao.maps.Marker({ position, map }))
       bounds.extend(position)
     }
+    const lines: KakaoPolyline[] = []
+    for (const [paths, color] of [
+      [data?.transit.paths, '#2563eb'], [data?.walk.paths, '#dc2626'],
+    ] as const) {
+      for (const section of paths ?? []) {
+        const path = section.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)
+          && Math.abs(p.x) <= 180 && Math.abs(p.y) <= 90)
+          .map((p) => new kakao.maps.LatLng(p.y, p.x))
+        if (path.length < 2) continue
+        path.forEach((point) => bounds.extend(point))
+        lines.push(new kakao.maps.Polyline({ map, path, strokeWeight: 5,
+          strokeColor: color, strokeOpacity: 0.85, strokeStyle: 'solid' }))
+      }
+    }
     if (points.length === 1) {
       map.setCenter(new kakao.maps.LatLng(points[0]!.y, points[0]!.x))
       map.setLevel(4)
@@ -81,13 +97,14 @@ export function MapPanel({ start, end }: Props) {
       const isMobile = window.matchMedia('(max-width: 860px)').matches
       map.setBounds(
         bounds,
-        isMobile ? Math.round(window.innerHeight * 0.55) : 40,
+        isMobile ? 200 : 40,
         isMobile ? 40 : 40,
-        isMobile ? Math.round(window.innerHeight * 0.44) : 40,
+        isMobile ? 180 : 40,
         isMobile ? 40 : 460,
       )
     }
-  }, [start, end, status])
+    return () => { lines.forEach((line) => line.setMap(null)) }
+  }, [start, end, status, data])
 
   if (!hasKakaoKey) {
     return (
