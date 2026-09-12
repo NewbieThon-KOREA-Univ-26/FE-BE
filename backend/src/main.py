@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from src.config.settings import Settings
-from src.services.compare import ApiError, CompareResponse, Odsay
+from src.services.compare import ApiError, CompareResponse
 from src.services.auth import (
     SESSION_COOKIE,
     STATE_COOKIE,
@@ -29,14 +29,8 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
         async with httpx.AsyncClient(transport=transport) as client:
-from src.services.auth import (
-    SESSION_COOKIE,
-    STATE_COOKIE,
-    STATE_TTL_SECONDS,
-    AuthUser,
-    KakaoAuth,
-)
-from src.services.kakao import KakaoRouting
+            app.state.router = KakaoRouting(client, settings)
+            app.state.kakao_auth = KakaoAuth(client, settings)
             yield
 
     app = FastAPI(title='걸을만한데? API', lifespan=lifespan)

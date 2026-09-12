@@ -22,6 +22,15 @@ export interface WalkInfo {
   path?: Coordinate[]
 }
 
+export type TransitRouteMode = 'bus' | 'subway'
+
+export interface TransitRouteStep {
+  mode: TransitRouteMode
+  lineName?: string
+  fromName?: string
+  toName?: string
+}
+
 export interface TransitInfo {
   paths?: Coordinate[][]
   geometryWarning?: string | null
@@ -37,6 +46,8 @@ export interface TransitInfo {
   walkDuration: number
   /** 대중교통 경로 좌표. 정류장·역을 이은 근사 폴리라인입니다. */
   path?: Coordinate[]
+  /** 대중교통 탑승 구간별 간단한 승차·하차 안내입니다. */
+  routeSteps?: TransitRouteStep[]
 }
 
 export interface Savings {
