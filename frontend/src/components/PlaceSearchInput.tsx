@@ -31,6 +31,8 @@ function KakaoPlaceInput({ id, label, value, onChange, placeholder }: Props) {
   useEffect(() => {
     if (value) {
       setQuery(value.name)
+    } else {
+      setQuery('')
     }
   }, [value])
 
@@ -143,6 +145,8 @@ function ManualPlaceInput({ id, label, value, onChange, placeholder }: Props) {
   useEffect(() => {
     if (value) {
       setText(`${value.y}, ${value.x}`)
+    } else {
+      setText('')
     }
   }, [value])
 

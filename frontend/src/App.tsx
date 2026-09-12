@@ -22,6 +22,12 @@ export default function App() {
     }
   }
 
+  const resetSearch = () => {
+    setStart(null)
+    setEnd(null)
+    reset()
+  }
+
   return (
     <div className="app">
       <header className="app-header">
@@ -52,7 +58,7 @@ export default function App() {
             </p>
           )}
           {state.status === 'error' && <ErrorBanner error={state.error} onRetry={compare} />}
-          {state.status === 'success' && <ResultPanel data={state.data} onReset={reset} />}
+          {state.status === 'success' && <ResultPanel data={state.data} onReset={resetSearch} />}
         </section>
 
         <section className="panel panel-map" aria-label="지도">
