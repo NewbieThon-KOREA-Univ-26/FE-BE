@@ -32,7 +32,7 @@ API 키를 담은 `.env`와 `.venv`는 Git에서 제외합니다.
 실제 키는 커밋하거나 프론트에 전달하지 마세요.
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn src.main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
 ```
 
 - API 문서: http://localhost:8000/docs
@@ -135,3 +135,16 @@ HTTP 모의 응답으로 경로 선택·단위 변환·환승 계산·좌표 검
 > `src/services/kakao.py` 가 여러 후보 이름을 훑어 읽고, 해석에 실패하면
 > 응답의 최상위 키 목록을 오류 메시지에 담습니다. 실제 키 이름을 확인하면
 > 같은 파일 위쪽의 `*_KEYS` 목록 맨 앞에 추가하세요.
+
+## 진입점
+
+배포와 로컬이 같은 경로를 쓰도록 서비스 루트에 `main.py` 를 두었습니다.
+
+```
+backend/main.py      -> from src.main import app   (Vercel entrypoint: main:app)
+backend/src/main.py  -> 실제 앱 구성
+```
+
+`vercel.json` 이 `src.main:app` 을 직접 가리키면 Vercel 이 그 파일을 단독 모듈로 읽어
+안쪽의 `from src.config...` 가 `No module named 'src'` 로 깨집니다.
+루트의 `main.py` 를 거치면 `backend/` 가 모듈 경로에 들어가 정상 동작합니다.
