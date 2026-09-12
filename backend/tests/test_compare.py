@@ -58,6 +58,7 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(body['transit'], {'duration': 10, 'fare': 1400,
                          'transfers': 1, 'walkDistance': 320, 'walkDuration': 5,
                          'paths': [self.points]})
+        self.assertTrue(body['savings'].pop('voucher'))   # 요청마다 새로 발급되는 1회용 적립권
         self.assertEqual(body['savings'], {'amount': 1400, 'extraMinutes': 6})
         self.assertEqual(body['recommendation']['choice'], 'walk')
         for request in self.calls:

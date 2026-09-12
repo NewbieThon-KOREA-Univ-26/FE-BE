@@ -81,6 +81,18 @@ KAKAO_TRANSIT_QUERY=origin={sx},{sy}&destination={ex},{ey}
 `GET /api/debug/upstream/transit?startX=…&startY=…&endX=…&endY=…` (또는 `walk`) 를 엽니다.
 카카오 원본 응답이 그대로 나옵니다. 확인이 끝나면 끕니다.
 
+## 보안·남용 방지
+
+- **절감액 누적(F8·F9)** 은 서버가 서명한 토큰(`?t=…`)으로 저장합니다. 주소창에서 내용을 고치면 서명이
+  깨져 0 으로 돌아가고, 적립은 `/api/compare` 가 준 1회용 적립권을 `/api/savings/claim` 에 내야만 됩니다.
+  서명 비밀은 `SESSION_SECRET_KEY` 입니다. 없으면 프로세스마다 임의 키를 써서 재시작 시 누적액이 무효가 되므로
+  배포에서는 꼭 넣으세요 (`render.yaml` 이 자동 생성합니다).
+- **요청 제한**: IP 당 분당 `RATE_LIMIT_PER_MINUTE`(기본 60) 을 넘으면 429 `RATE_LIMITED`. `/api/health` 는 예외.
+- **결과 캐시**: 같은 출발·도착(≈10m)은 `COMPARE_CACHE_SECONDS`(기본 120) 동안 카카오를 다시 부르지 않습니다.
+- **진단 엔드포인트** `/api/echo`, `/api/debug/upstream/*` 는 `DEBUG_RAW_UPSTREAM=true` 일 때만 열립니다.
+- `/api` 응답에는 `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer` 가 붙습니다.
+- 비밀은 `SecretStr` 로만 다루고, 오류 메시지에는 업스트림 본문·키를 담지 않습니다 (테스트로 고정).
+
 날씨(F6)는 `WEATHER_API_KEY` 를 넣으면 켜집니다. 기본 제공자는 WeatherAPI.com 이고
 `WEATHER_PROVIDER=openweather` 로 OpenWeatherMap 을 쓸 수 있습니다. 키가 없거나 조회에 실패해도
 비교 결과는 날씨 없이 정상 응답합니다. 비·눈, 강수확률 60% 이상, 30°C 이상, -5°C 이하면

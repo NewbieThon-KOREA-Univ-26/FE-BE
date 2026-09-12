@@ -59,6 +59,8 @@ export interface Savings {
   amount: number
   /** 걸을 때 더 드는 시간 (분) */
   extraMinutes: number
+  /** F9 — 이번 결과로 적립할 수 있는 1회용 서명 적립권. /api/savings/claim 에 그대로 보냅니다. */
+  voucher?: string
 }
 
 export type RecommendationChoice = 'walk' | 'transit'
@@ -92,6 +94,9 @@ export type ApiErrorCode =
   | 'SAME_LOCATION'
   | 'TOO_FAR'
   | 'NO_ROUTE'
+  | 'INVALID_VOUCHER'
+  | 'VOUCHER_EXPIRED'
+  | 'VOUCHER_USED'
   | 'UPSTREAM_ERROR'
   | 'RATE_LIMITED'
   | 'CONFIGURATION_ERROR'

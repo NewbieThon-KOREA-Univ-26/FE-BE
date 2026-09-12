@@ -69,3 +69,10 @@ class Settings(BaseSettings):
     walk_max_meters: float = Field(default=2000, gt=0)
     # 이보다 먼 구간은 조회하지 않습니다. 카카오 도보 경로가 약 30km 를 넘으면 결과를 주지 않습니다.
     max_distance_km: float = Field(default=30, gt=0)
+
+    # 남용 방지. IP 당 분당 /api 요청 수. 0 이면 제한하지 않습니다.
+    rate_limit_per_minute: int = Field(default=60, ge=0)
+    # 같은 출발·도착(소수 4자리 ≈ 10m)의 비교 결과를 재사용하는 시간(초). 0 이면 캐시하지 않습니다.
+    compare_cache_seconds: int = Field(default=120, ge=0)
+    # 적립권(바우처) 유효 시간. /api/compare 응답을 받고 이 시간 안에 "걸어갈래요"를 눌러야 합니다.
+    savings_voucher_ttl_seconds: int = Field(default=1800, gt=0)

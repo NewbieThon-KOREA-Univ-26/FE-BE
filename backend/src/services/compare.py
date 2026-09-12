@@ -54,6 +54,8 @@ class Transit(Geometry):
 class Savings(BaseModel):
     amount: int
     extraMinutes: float
+    # F9 — 이번 결과로 적립할 수 있는 1회용 서명 적립권. 프론트가 /api/savings/claim 에 그대로 보냅니다.
+    voucher: str | None = None
 
 
 class Recommendation(BaseModel):
