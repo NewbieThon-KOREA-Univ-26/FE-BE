@@ -35,6 +35,22 @@ function haversineMeters(a: Coordinate, b: Coordinate): number {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
+/**
+ * 예시용 경로 좌표. 출발지에서 도착지까지 살짝 꺾어 실제 경로처럼 보이게 만듭니다.
+ * 실제 경로가 아니라 지도 표시를 확인하기 위한 값입니다.
+ */
+function fakePath(start: Coordinate, end: Coordinate, bend: number): Coordinate[] {
+  const midX = (start.x + end.x) / 2
+  const midY = (start.y + end.y) / 2
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  return [
+    start,
+    { x: midX - dy * bend, y: midY + dx * bend },
+    end,
+  ]
+}
+
 export async function mockCompare(start: Coordinate, end: Coordinate): Promise<CompareResponse> {
   await delay(600)
 
@@ -54,7 +70,8 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
       distance: walkDistance,
       duration: walkDuration,
       calories: Math.round(walkDistance * KCAL_PER_METER),
-      paths: [[start, end]],
+      paths: [fakePath(start, end, 0.08)],
+      geometryWarning: '예시 데이터의 경로 선은 실제 경로가 아닙니다.',
     },
     transit: {
       duration: transitDuration,
@@ -62,8 +79,7 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
       transfers: 0,
       walkDistance: Math.min(320, walkDistance),
       walkDuration: Math.min(5, walkDuration),
-      paths: [],
-      geometryWarning: '예시 데이터에는 실제 대중교통 경로 선이 없습니다.',
+      paths: [fakePath(start, end, -0.14)],
     },
     savings: {
       amount: EXAMPLE_FARE_WON,

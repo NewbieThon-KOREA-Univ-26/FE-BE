@@ -52,10 +52,10 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body['walk'], {'distance': 1180, 'duration': 16,
-                                      'paths': [self.points], 'geometryWarning': None})
+                                      'paths': [self.points]})
         self.assertEqual(body['transit'], {'duration': 10, 'fare': 1400,
                          'transfers': 1, 'walkDistance': 320, 'walkDuration': 5,
-                         'paths': [self.points], 'geometryWarning': None})
+                         'paths': [self.points]})
         self.assertEqual(body['savings'], {'amount': 1400, 'extraMinutes': 6})
         self.assertEqual(body['recommendation']['choice'], 'walk')
         for request in self.calls:
@@ -184,6 +184,68 @@ class CompareTests(unittest.TestCase):
             self.assertEqual(client.get('/api/health').status_code, 200)
             self.assertEqual(client.get('/api/compare', params=PARAMS).status_code, 503)
         self.assertEqual(self.calls, [])
+
+
+class PathTests(CompareTests):
+    """경로 선 좌표(F: 지도 경로 표시)가 응답에 실리는지 확인합니다."""
+
+    def test_transit_path_from_stations(self):
+        self.transit['result']['path'][2]['subPath'][1]['passStopList'] = {'stations': [
+            {'x': '127.03', 'y': '37.50'}, {'x': '127.035', 'y': '37.505'},
+        ]}
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['transit']['path'], [
+            {'x': 127.03, 'y': 37.5}, {'x': 127.035, 'y': 37.505},
+        ])
+
+    def test_transit_path_falls_back_to_section_endpoints(self):
+        section = self.transit['result']['path'][2]['subPath'][1]
+        section.update(startX=127.0, startY=37.5, endX=127.01, endY=37.51)
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['transit']['path'], [
+            {'x': 127.0, 'y': 37.5}, {'x': 127.01, 'y': 37.51},
+        ])
+
+    def test_path_is_omitted_when_provider_has_no_coordinates(self):
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertNotIn('path', body['transit'])
+        self.assertNotIn('path', body['walk'])
+
+    def test_walk_path_is_read_when_present(self):
+        self.walk['result']['path'][0]['recommend']['sections'] = [
+            {'points': [{'x': 127.0276, 'y': 37.4979}, {'x': 127.03, 'y': 37.50}]},
+            {'points': [{'x': 127.04, 'y': 37.51}]},
+        ]
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['walk']['path'], [
+            {'x': 127.0276, 'y': 37.4979}, {'x': 127.03, 'y': 37.5}, {'x': 127.04, 'y': 37.51},
+        ])
+
+    def test_broken_coordinates_never_break_the_response(self):
+        self.transit['result']['path'][2]['subPath'][1]['passStopList'] = {'stations': [
+            # httpx 는 float('inf') 를 직렬화하지 못하므로 실제 API 처럼 문자열로 둡니다.
+            {'x': 'abc', 'y': None}, {'x': 'inf', 'y': 37.5}, {'y': 37.5},
+        ]}
+        self.walk['result']['path'][0]['recommend']['sections'] = 'not a list'
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertNotIn('path', body['transit'])
+        self.assertNotIn('path', body['walk'])
+        self.assertEqual(body['savings']['amount'], 1400)
+
+    def test_single_point_is_not_a_line(self):
+        self.transit['result']['path'][2]['subPath'][1]['passStopList'] = {'stations': [
+            {'x': 127.03, 'y': 37.5}, {'x': 127.03, 'y': 37.5},
+        ]}
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertNotIn('path', body['transit'])
 
 
 if __name__ == '__main__':

@@ -42,7 +42,9 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     async def health():
         return {'status': 'ok'}
 
-    @app.get('/api/compare', response_model=CompareResponse)
+    # path 나 calories 처럼 값이 없는 선택 필드는 응답에서 아예 빼서
+    # 명세서의 "구현 시에만 내려옵니다" 규칙을 지킵니다.
+    @app.get('/api/compare', response_model=CompareResponse, response_model_exclude_none=True)
     async def compare(request: Request, startX: Longitude, startY: Latitude,
                       endX: Longitude, endY: Latitude):
         if (startX, startY) == (endX, endY):

@@ -13,6 +13,10 @@ interface Props {
 /** 지도 첫 화면 중심. 서울시청 부근. */
 const DEFAULT_CENTER = { x: 126.978, y: 37.5665 }
 
+/** 노션 화면 스케치의 선 색: 도보는 빨강, 대중교통은 파랑. */
+const WALK_COLOR = '#e0453b'
+const TRANSIT_COLOR = '#2563eb'
+
 /**
  * 오른쪽 지도 영역. 카카오 키가 있으면 지도를 띄우고 출발지·도착지 마커를 찍습니다.
  * 응답의 실제 좌표로 도보 및 대중교통 경로를 구간별로 표시합니다.
@@ -76,7 +80,7 @@ export function MapPanel({ start, end, data }: Props) {
     const fitPoints = points.map((point) => new kakao.maps.LatLng(point.y, point.x))
     const lines: KakaoPolyline[] = []
     for (const [paths, color] of [
-      [data?.transit.paths, '#2563eb'], [data?.walk.paths, '#dc2626'],
+      [data?.transit.paths, TRANSIT_COLOR], [data?.walk.paths, WALK_COLOR],
     ] as const) {
       for (const section of paths ?? []) {
         const path = section.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)
@@ -186,6 +190,18 @@ export function MapPanel({ start, end, data }: Props) {
   return (
     <div className="map">
       <div ref={containerRef} className="map-canvas" />
+      {status === 'ready' && data && (
+        <div className="map-legend">
+          <span className="legend-item">
+            <i className="legend-line legend-walk" aria-hidden="true" />
+            도보
+          </span>
+          <span className="legend-item">
+            <i className="legend-line legend-transit" aria-hidden="true" />
+            대중교통
+          </span>
+        </div>
+      )}
       {status === 'idle' && <p className="map-overlay">지도를 불러오는 중…</p>}
       {status === 'error' && (
         <div className="map-overlay map-error" role="alert">

@@ -18,6 +18,8 @@ export interface WalkInfo {
   duration: number
   /** 소모 열량 (kcal). F7 구현 시에만 내려옵니다. */
   calories?: number
+  /** 기존 단일 경로 응답과의 호환용. 지도는 구간별 paths를 사용합니다. */
+  path?: Coordinate[]
 }
 
 export interface TransitInfo {
@@ -33,6 +35,8 @@ export interface TransitInfo {
   walkDistance: number
   /** 대중교통 경로 안에 포함된 도보 시간 (분) */
   walkDuration: number
+  /** 대중교통 경로 좌표. 정류장·역을 이은 근사 폴리라인입니다. */
+  path?: Coordinate[]
 }
 
 export interface Savings {
@@ -66,3 +70,10 @@ export type ApiErrorCode =
   | 'RATE_LIMITED'
   | 'CONFIGURATION_ERROR'
   | 'SERVICE_NOT_CONFIGURED'
+
+export interface ApiErrorBody {
+  error: {
+    code: ApiErrorCode | string
+    message: string
+  }
+}

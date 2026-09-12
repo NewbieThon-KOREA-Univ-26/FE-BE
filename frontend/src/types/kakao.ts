@@ -23,6 +23,7 @@ export interface KakaoMapProjection {
 }
 
 export interface KakaoMap {
+  getCenter(): KakaoLatLng
   getProjection(): KakaoMapProjection
   getLevel(): number
   jump(center: KakaoLatLng, level: number, options?: { animate?: boolean | { duration: number } }): void
