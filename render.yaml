@@ -21,6 +21,12 @@ services:
       # 날씨 (F6). WeatherAPI.com 키. 없으면 날씨 없이 동작합니다.
       - key: WEATHER_API_KEY
         sync: false
+      # 절감액 토큰·로그인 세션 서명용 비밀. Render 가 자동 생성합니다. 바꾸면 기존 누적액 토큰이 무효가 됩니다.
+      - key: SESSION_SECRET_KEY
+        generateValue: true
+      # HTTPS 에서만 쿠키를 보냅니다 (Render 는 HTTPS 종단).
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
       # 프론트 주소. 쉼표로 여러 개를 적을 수 있습니다.
       - key: CORS_ORIGINS
         value: https://walkride-fe.vercel.app,http://localhost:5173

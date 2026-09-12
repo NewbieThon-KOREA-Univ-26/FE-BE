@@ -70,6 +70,7 @@ class KakaoTests(unittest.TestCase):
                 [{'x': 127.035, 'y': 37.505}, {'x': 127.04, 'y': 37.51}],
             ],
         })
+        self.assertTrue(body['savings'].pop('voucher'))   # 요청마다 새로 발급되는 1회용 적립권
         self.assertEqual(body['savings'], {'amount': 1400, 'extraMinutes': 6})
         self.assertEqual(body['recommendation']['choice'], 'walk')
         for request in self.calls:
@@ -335,7 +336,11 @@ class KakaoTests(unittest.TestCase):
             self.assertEqual(client.get('/api/compare', params=PARAMS).status_code, 502)
 
     def test_debug_upstream_endpoint_is_off_by_default_and_returns_raw_when_on(self):
-        with self.client() as client:
+        # 플래그가 꺼진 앱을 명시적으로 만듭니다 (EchoTests 는 client() 가 플래그를 켜므로).
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='kakao-key', debug_raw_upstream=False),
+            httpx.MockTransport(self.handler),
+        )) as client:
             self.assertEqual(client.get('/api/debug/upstream/transit', params=PARAMS).status_code, 404)
         with TestClient(create_app(
             Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='kakao-key',
@@ -530,6 +535,8 @@ class PathParameterTests(KakaoTests):
         with self.client() as client:
             by_query = client.get('/api/compare', params=PARAMS).json()
             by_path = client.get('/api/compare/127.0276,37.4979/127.04,37.51').json()
+        for body in (by_query, by_path):
+            body['savings'].pop('voucher', None)   # 적립권은 요청마다 다릅니다
         self.assertEqual(by_query, by_path)
 
     def test_same_location_is_rejected(self):
@@ -568,6 +575,8 @@ class BodyParameterTests(KakaoTests):
         with self.client() as client:
             by_query = client.get('/api/compare', params=PARAMS).json()
             by_body = client.post('/api/compare', json=self.BODY).json()
+        for body in (by_query, by_body):
+            body['savings'].pop('voucher', None)   # 적립권은 요청마다 다릅니다
         self.assertEqual(by_query, by_body)
 
     def test_same_location_is_rejected(self):
@@ -603,6 +612,13 @@ class EchoTests(KakaoTests):
 
     배포 프록시가 경로·쿼리·메서드·본문 중 무엇을 지우는지 확인하는 엔드포인트입니다.
     """
+
+    def client(self, key='kakao-key'):
+        # 진단 엔드포인트는 DEBUG_RAW_UPSTREAM=true 일 때만 열립니다.
+        return TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key=key, debug_raw_upstream=True),
+            httpx.MockTransport(self.handler)))
+
 
     def test_get_reports_what_arrived(self):
         with self.client() as client:

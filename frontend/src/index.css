@@ -338,6 +338,16 @@ input {
   color: var(--muted);
 }
 
+.status-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
 .search-toggle {
   display: none;
 }

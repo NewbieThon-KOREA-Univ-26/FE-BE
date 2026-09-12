@@ -1,4 +1,5 @@
 import asyncio
+import time
 from contextlib import asynccontextmanager
 import hmac
 import math
@@ -21,9 +22,16 @@ from src.services.auth import (
     KakaoAuth,
 )
 from src.services.kakao import KakaoRouting
+from src.services.ratelimit import RateLimiter, client_key
+from src.services.savings import SavingsLedger
 from src.services.weather import Weather
 
 Longitude = Annotated[float, Query(ge=-180, le=180, allow_inf_nan=False)]
+
+
+class ClaimBody(BaseModel):
+    total: str | None = None
+    voucher: str
 Latitude = Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)]
 
 
@@ -38,6 +46,7 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
             'router': provider(client, settings),
             'kakao_auth': KakaoAuth(client, settings),
             'weather': Weather(client, settings),
+            'savings': SavingsLedger(settings),
         }, client
 
     def service(app: FastAPI, name: str):
@@ -70,6 +79,25 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     app = FastAPI(title='걸을만한데? API', lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
                        allow_credentials=True, allow_methods=['GET', 'POST'], allow_headers=['*'])
+
+    limiter = RateLimiter(settings.rate_limit_per_minute)
+    compare_cache: dict[tuple, tuple[float, CompareResponse]] = {}
+
+    @app.middleware('http')
+    async def guard(request: Request, call_next):
+        """/api 요청에 남용 제한과 보안 헤더를 붙입니다."""
+        if request.url.path.startswith('/api/') and request.url.path != '/api/health':
+            if not limiter.allow(client_key(request.headers, request.client.host if request.client else None)):
+                response = JSONResponse(status_code=429, content={'error': {
+                    'code': 'RATE_LIMITED', 'message': '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요'}})
+                response.headers['Retry-After'] = '60'
+                return response
+        response = await call_next(request)
+        if request.url.path.startswith('/api/'):
+            response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+            response.headers.setdefault('Referrer-Policy', 'no-referrer')
+            response.headers.setdefault('Cache-Control', 'no-store')
+        return response
 
     @app.exception_handler(ApiError)
     async def api_error_handler(request: Request, exc: ApiError):
@@ -106,6 +134,8 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
         배포 프록시가 경로·쿼리·메서드·본문 중 무엇을 지우는지 확인하는 용도입니다.
         비밀이 섞일 수 있는 헤더 값은 담지 않고 이름만 담습니다.
         """
+        if not settings.debug_raw_upstream:
+            raise ApiError(404, 'NOT_FOUND', '진단 엔드포인트가 꺼져 있습니다')
         try:
             body = (await request.body()).decode('utf-8', 'replace')[:500]
         except Exception:
@@ -185,14 +215,37 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
             raise ApiError(400, 'TOO_FAR',
                            f'출발지와 도착지가 약 {km:.0f}km 떨어져 있어요. '
                            f'{settings.max_distance_km:g}km 이내 구간만 비교할 수 있습니다')
-        # 날씨는 경로 조회와 나란히 묻고, 못 구하면 없이 갑니다 (F6).
-        result, weather = await asyncio.gather(
-            service(request.app, 'router').compare(sx, sy, ex, ey),
-            service(request.app, 'weather').current(sx, sy),
-        )
-        if weather is None:
-            return result
-        return build_comparison(result.walk, result.transit, settings, weather)
+        cache_key = (round(sx, 4), round(sy, 4), round(ex, 4), round(ey, 4))
+        cached = compare_cache.get(cache_key)
+        if cached and cached[0] > time.monotonic():
+            result = cached[1]
+        else:
+            # 날씨는 경로 조회와 나란히 묻고, 못 구하면 없이 갑니다 (F6).
+            result, weather = await asyncio.gather(
+                service(request.app, 'router').compare(sx, sy, ex, ey),
+                service(request.app, 'weather').current(sx, sy),
+            )
+            if weather is not None:
+                result = build_comparison(result.walk, result.transit, settings, weather)
+            if settings.compare_cache_seconds:
+                if len(compare_cache) >= 256:
+                    compare_cache.pop(next(iter(compare_cache)))
+                compare_cache[cache_key] = (time.monotonic() + settings.compare_cache_seconds, result)
+        # 적립권은 캐시와 무관하게 요청마다 새로 발급합니다 (1회용이라 재사용되면 안 됩니다).
+        response = result.model_copy(deep=True)
+        response.savings.voucher = service(request.app, 'savings').issue_voucher(response.savings.amount)
+        return response
+
+    @app.get('/api/savings')
+    async def read_savings(request: Request, total: str | None = None):
+        """누적액 토큰을 검증해 숫자로 돌려줍니다. 위조·손상이면 0 과 valid=false."""
+        saved, walks, valid = service(request.app, 'savings').total_from(total)
+        return {'saved': saved, 'walks': walks, 'valid': valid}
+
+    @app.post('/api/savings/claim')
+    async def claim_savings(request: Request, body: ClaimBody):
+        """F9 — 적립권을 소모하고 새 누적액 토큰을 돌려줍니다."""
+        return service(request.app, 'savings').claim(body.total, body.voucher)
 
     @app.get('/api/debug/upstream/{kind}')
     async def debug_upstream(request: Request, kind: str, startX: Longitude, startY: Latitude,

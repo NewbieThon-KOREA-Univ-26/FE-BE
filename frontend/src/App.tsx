@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ErrorBanner } from './components/ErrorBanner'
 import { MapPanel } from './components/MapPanel'
 import { ResultPanel } from './components/ResultPanel'
@@ -6,7 +6,8 @@ import { RouteForm } from './components/RouteForm'
 import { SavingsTotalBadge } from './components/SavingsTotalBadge'
 import { WalkRewardModal } from './components/WalkRewardModal'
 import { useCompare } from './hooks/useCompare'
-import { EMPTY_TOTAL, addWalk, readTotal, writeTotal, type SavingsTotal } from './lib/savings'
+import { claimWalk, verifyTotal } from './api/savings'
+import { EMPTY_TOTAL, readTotal, writeTotal, type SavingsTotal } from './lib/savings'
 import type { Place } from './types/place'
 
 /**
@@ -22,6 +23,29 @@ export default function App() {
 
   // F8 — 새로고침해도 남도록 주소창에서 읽어 시작합니다.
   const [total, setTotal] = useState<SavingsTotal>(() => readTotal())
+  // 적립 실패 안내 (적립권 만료·중복 등). 성공하면 지웁니다.
+  const [claimError, setClaimError] = useState<string | null>(null)
+
+  // 주소창의 누적액 토큰은 서버 서명으로 검증합니다. 위조·손상이면 0 으로 되돌립니다.
+  useEffect(() => {
+    const token = readTotal().token
+    if (!token) {
+      return
+    }
+    let alive = true
+    verifyTotal(token)
+      .then((verified) => {
+        if (!alive) return
+        setTotal(verified)
+        writeTotal(verified)
+      })
+      .catch(() => {
+        // 서버에 닿지 못하면 화면 값은 두고, 적립 시점에 다시 검증됩니다.
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
   // F9 — 팝업에 띄울 이번 적립액. null 이면 팝업이 닫힌 상태입니다.
   const [reward, setReward] = useState<number | null>(null)
   // 같은 결과로 두 번 적립하지 않도록 표시합니다.
@@ -44,16 +68,20 @@ export default function App() {
   }
 
   /** F9 — 걷기를 선택하면 절감액을 누적하고 팝업을 띄웁니다. */
-  const chooseWalk = useCallback(() => {
+  const chooseWalk = useCallback(async () => {
     if (!result || rewarded) {
       return
     }
-    const amount = result.savings.amount
-    const next = addWalk(total, amount)
-    setTotal(next)
-    writeTotal(next)
-    setRewarded(true)
-    setReward(amount)
+    try {
+      const { total: next, gained } = await claimWalk(total, result.savings.voucher, result.savings.amount)
+      setTotal(next)
+      writeTotal(next)
+      setClaimError(null)
+      setRewarded(true)
+      setReward(gained)
+    } catch (error) {
+      setClaimError(error instanceof Error ? error.message : '적립에 실패했습니다')
+    }
   }, [result, rewarded, total])
 
   const resetTotal = () => {
@@ -74,6 +102,9 @@ export default function App() {
               </div>
             </header>
             <SavingsTotalBadge total={total} onReset={resetTotal} />
+            {claimError && (
+              <p className="status status-error" role="alert">적립 실패: {claimError}</p>
+            )}
             <RouteForm
               start={start}
               end={end}
