@@ -1,6 +1,20 @@
 import type { ApiErrorCode } from '../types/api'
 
 /**
+ * 백엔드 주소. 비워 두면 같은 도메인의 /api 로 보냅니다.
+ *
+ * Vercel Services 의 라우팅이 경로·쿼리를 지우는 문제가 있어, 백엔드를 별도
+ * 프로젝트로 배포하고 그 주소를 여기에 넣으면 라우팅 계층을 건너뛸 수 있습니다.
+ * 그 경우 백엔드에 CORS_ORIGINS 설정이 필요합니다.
+ */
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
+
+/** 호출할 전체 주소를 만듭니다. */
+function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`
+}
+
+/**
  * 백엔드 호출과 입력 검증 오류를 화면까지 전달하는 예외입니다.
  * code 는 ErrorBanner 가 안내 문구를 고르는 데 씁니다.
  */
@@ -30,12 +44,13 @@ export async function getJson<T>(
   for (const [key, value] of Object.entries(params)) {
     query.set(key, String(value))
   }
-  const url = query.size > 0 ? `${path}?${query}` : path
+  const url = query.size > 0 ? `${apiUrl(path)}?${query}` : apiUrl(path)
 
   let response: Response
   try {
     response = await fetch(url, {
       headers: { Accept: 'application/json' },
+      credentials: 'include',
     })
   } catch {
     throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0)
@@ -74,10 +89,12 @@ async function readJsonOrThrow<T>(response: Response): Promise<T> {
 export async function postJson<T>(path: string, body: unknown): Promise<T> {
   let response: Response
   try {
-    response = await fetch(path, {
+    response = await fetch(apiUrl(path), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(body),
+      // 백엔드가 다른 도메인일 때도 로그인 세션 쿠키가 실리도록 합니다.
+      credentials: 'include',
     })
   } catch {
     throw new ApiError('NETWORK_ERROR', '서버에 연결할 수 없습니다', 0)

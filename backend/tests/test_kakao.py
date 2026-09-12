@@ -263,3 +263,30 @@ class BodyParameterTests(KakaoTests):
         with self.client() as client:
             message = client.get('/api/compare').json()['error']['message']
         self.assertIn('받은 경로: /api/compare', message)
+
+
+class EchoTests(KakaoTests):
+    """진단용 /api/echo.
+
+    배포 프록시가 경로·쿼리·메서드·본문 중 무엇을 지우는지 확인하는 엔드포인트입니다.
+    """
+
+    def test_get_reports_what_arrived(self):
+        with self.client() as client:
+            body = client.get('/api/echo?a=1&b=2').json()
+        self.assertEqual(body['method'], 'GET')
+        self.assertEqual(body['path'], '/api/echo')
+        self.assertEqual(body['queryKeys'], ['a', 'b'])
+
+    def test_post_reports_the_body(self):
+        with self.client() as client:
+            body = client.post('/api/echo', json={'hi': 1}).json()
+        self.assertEqual(body['method'], 'POST')
+        self.assertIn('hi', body['body'])
+
+    def test_header_values_are_not_exposed(self):
+        # 헤더에는 키나 쿠키가 섞일 수 있으므로 이름만 담습니다.
+        with self.client() as client:
+            body = client.get('/api/echo', headers={'Authorization': 'KakaoAK secret-value'}).json()
+        self.assertIn('authorization', body['headerNames'])
+        self.assertNotIn('secret-value', str(body))
