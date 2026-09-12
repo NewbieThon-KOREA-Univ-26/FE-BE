@@ -1,5 +1,5 @@
 /**
- * 백엔드 API 타입. 노션 "API 명세서" 문서의 GET /api/compare 응답과 1:1로 맞춥니다.
+ * 화면에서 사용하는 경로 비교 결과 타입입니다.
  * 필드를 바꿀 때는 명세서도 같이 고쳐 주세요.
  */
 
@@ -10,6 +10,8 @@ export interface Coordinate {
 }
 
 export interface WalkInfo {
+  paths?: Coordinate[][]
+  geometryWarning?: string | null
   /** 총 도보 거리 (m) */
   distance: number
   /** 총 도보 시간 (분) */
@@ -19,6 +21,8 @@ export interface WalkInfo {
 }
 
 export interface TransitInfo {
+  paths?: Coordinate[][]
+  geometryWarning?: string | null
   /** 대중교통 총 소요시간 (분) */
   duration: number
   /** 대중교통 요금 (원) */
@@ -60,10 +64,5 @@ export type ApiErrorCode =
   | 'NO_ROUTE'
   | 'UPSTREAM_ERROR'
   | 'RATE_LIMITED'
-
-export interface ApiErrorBody {
-  error: {
-    code: ApiErrorCode | string
-    message: string
-  }
-}
+  | 'CONFIGURATION_ERROR'
+  | 'SERVICE_NOT_CONFIGURED'

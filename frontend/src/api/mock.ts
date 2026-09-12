@@ -54,6 +54,7 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
       distance: walkDistance,
       duration: walkDuration,
       calories: Math.round(walkDistance * KCAL_PER_METER),
+      paths: [[start, end]],
     },
     transit: {
       duration: transitDuration,
@@ -61,6 +62,8 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
       transfers: 0,
       walkDistance: Math.min(320, walkDistance),
       walkDuration: Math.min(5, walkDuration),
+      paths: [],
+      geometryWarning: '예시 데이터에는 실제 대중교통 경로 선이 없습니다.',
     },
     savings: {
       amount: EXAMPLE_FARE_WON,

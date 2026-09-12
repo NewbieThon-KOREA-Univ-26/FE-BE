@@ -12,7 +12,8 @@ PARAMS = dict(startX=127.0276, startY=37.4979, endX=127.04, endY=37.51)
 
 
 def transit_path(minutes, fare):
-    return {'info': {'totalTime': minutes, 'payment': fare, 'totalWalk': 320},
+    return {'info': {'totalTime': minutes, 'payment': fare, 'totalWalk': 320,
+                     'mapObj': f'126:37@{fare}:1:0:3'},
             'subPath': [{'trafficType': 3, 'sectionTime': 2},
                         {'trafficType': 1, 'sectionTime': 3},
                         {'trafficType': 3, 'sectionTime': 3},
@@ -25,6 +26,10 @@ class CompareTests(unittest.TestCase):
             'summary': {'distance': 1180, 'duration': 901}}}]}}
         self.transit = {'result': {'searchType': 0, 'path': [
             transit_path(20, 1000), transit_path(10, 1700), transit_path(10, 1400)]}}
+        self.points = [{'x': 127.0276, 'y': 37.4979}, {'x': 127.04, 'y': 37.51}]
+        self.walk['result']['path'][0]['recommend']['routes'] = [
+            {'coordinate': point} for point in self.points]
+        self.geometry = {'result': {'lane': [{'section': [{'graphPos': self.points}]}]}}
         self.calls = []
         self.failure = None
 
@@ -32,6 +37,8 @@ class CompareTests(unittest.TestCase):
         self.calls.append(request)
         if self.failure:
             return self.failure(request)
+        if request.url.path.endswith('loadLane'):
+            return httpx.Response(200, json=copy.deepcopy(self.geometry))
         return httpx.Response(200, json=copy.deepcopy(
             self.walk if request.url.path.endswith('searchWalkPathV2') else self.transit))
 
@@ -44,17 +51,61 @@ class CompareTests(unittest.TestCase):
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
-        self.assertEqual(body['walk'], {'distance': 1180, 'duration': 16})
+        self.assertEqual(body['walk'], {'distance': 1180, 'duration': 16,
+                                      'paths': [self.points], 'geometryWarning': None})
         self.assertEqual(body['transit'], {'duration': 10, 'fare': 1400,
-                         'transfers': 1, 'walkDistance': 320, 'walkDuration': 5})
+                         'transfers': 1, 'walkDistance': 320, 'walkDuration': 5,
+                         'paths': [self.points], 'geometryWarning': None})
         self.assertEqual(body['savings'], {'amount': 1400, 'extraMinutes': 6})
         self.assertEqual(body['recommendation']['choice'], 'walk')
         for request in self.calls:
             self.assertEqual(request.url.params['apiKey'], 'test-key')
             if request.url.path.endswith('searchWalkPathV2'):
                 self.assertEqual(request.url.params['loc'], '127.0276,37.4979,127.04,37.51')
+            elif request.url.path.endswith('loadLane'):
+                self.assertEqual(request.url.params['mapObject'], '0:0@1400:1:0:3')
             else:
                 self.assertEqual(request.url.params['SX'], '127.0276')
+
+    def test_missing_geometry_preserves_comparison(self):
+        self.geometry = {'error': {'code': '500'}}
+        self.walk['result']['path'][0]['recommend']['routes'] = []
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 200)
+        for mode in ('walk', 'transit'):
+            self.assertEqual(response.json()[mode]['paths'], [])
+            self.assertTrue(response.json()[mode]['geometryWarning'])
+
+    def test_load_lane_keeps_every_map_object_section(self):
+        self.transit['result']['path'] = [transit_path(10, 1400)]
+        self.transit['result']['path'][0]['info']['mapObj'] = (
+            '12018:1:3:7@5:2:310:329'
+        )
+        with self.client() as client:
+            client.get('/api/compare', params=PARAMS)
+        load_lane = next(
+            request for request in self.calls
+            if request.url.path.endswith('loadLane')
+        )
+        self.assertEqual(
+            load_lane.url.params['mapObject'],
+            '0:0@12018:1:3:7@5:2:310:329',
+        )
+
+    def test_disconnected_geometry_is_not_joined(self):
+        second = [{'x': 127.05, 'y': 37.52}, {'x': 127.06, 'y': 37.53}]
+        self.geometry['result']['lane'][0]['section'].append({'graphPos': second})
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['transit']['paths'], [self.points, second])
+
+    def test_invalid_geometry_does_not_break_comparison(self):
+        self.geometry['result']['lane'][0]['section'][0]['graphPos'][0]['x'] = 999
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['transit']['paths'], [])
 
     def test_invalid_input_never_calls_provider(self):
         with self.client() as client:
@@ -109,6 +160,15 @@ class CompareTests(unittest.TestCase):
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.json()['error']['code'], 'RATE_LIMITED')
+
+    def test_auth_failure_explains_endpoint_without_leaking_secret(self):
+        self.failure = lambda req: httpx.Response(200, json={
+            'error': [{'code': '500', 'message': '[ApiKeyAuthFailed] test-key'}]})
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        self.assertIn('도보 경로 인증', response.json()['error']['message'])
+        self.assertNotIn('test-key', response.text)
 
     def test_timeout(self):
         def timeout(request):
