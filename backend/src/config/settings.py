@@ -21,7 +21,8 @@ class Settings(BaseSettings):
     kakao_walk_path: str = '/v2/routing/pedestrian'
 
     odsay_api_key: SecretStr = SecretStr('')
-    kakao_rest_api_key: SecretStr = SecretStr('')
+
+    # 카카오 로그인(OAuth) 설정
     kakao_client_secret: SecretStr = SecretStr('')
     kakao_redirect_uri: str = 'http://localhost:8000/api/auth/kakao/callback'
     frontend_url: str = 'http://localhost:5173'

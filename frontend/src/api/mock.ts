@@ -76,10 +76,24 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
     transit: {
       duration: transitDuration,
       fare: EXAMPLE_FARE_WON,
-      transfers: 0,
+      transfers: 1,
       walkDistance: Math.min(320, walkDistance),
       walkDuration: Math.min(5, walkDuration),
       paths: [fakePath(start, end, -0.14)],
+      routeSteps: [
+        {
+          mode: 'subway',
+          lineName: '2호선',
+          fromName: '강남역',
+          toName: '잠실역',
+        },
+        {
+          mode: 'bus',
+          lineName: '간선 3412번',
+          fromName: '잠실역 버스정류장',
+          toName: '도착지 인근 정류장',
+        },
+      ],
     },
     savings: {
       amount: EXAMPLE_FARE_WON,
