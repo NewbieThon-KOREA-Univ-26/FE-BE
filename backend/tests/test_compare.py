@@ -43,8 +43,10 @@ class CompareTests(unittest.TestCase):
             self.walk if request.url.path.endswith('searchWalkPathV2') else self.transit))
 
     def client(self, key='test-key'):
-        return TestClient(create_app(Settings(_env_file=None, odsay_api_key=key),
-                                     httpx.MockTransport(self.handler)))
+        # 이 파일은 ODsay 제공자를 검증합니다. 카카오 제공자는 KakaoTests 에서 봅니다.
+        return TestClient(create_app(
+            Settings(_env_file=None, route_provider='odsay', odsay_api_key=key),
+            httpx.MockTransport(self.handler)))
 
     def test_comparison_and_provider_contract(self):
         with self.client() as client:

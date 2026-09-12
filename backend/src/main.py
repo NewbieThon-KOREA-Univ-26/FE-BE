@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from src.config.settings import Settings
 from src.services.compare import ApiError, CompareResponse, Odsay
+from src.services.kakao import KakaoRouting
 
 Longitude = Annotated[float, Query(ge=-180, le=180, allow_inf_nan=False)]
 Latitude = Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)]
@@ -20,7 +21,8 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app):
         async with httpx.AsyncClient(transport=transport) as client:
-            app.state.odsay = Odsay(client, settings)
+            provider = (KakaoRouting if settings.route_provider == 'kakao' else Odsay)
+            app.state.router = provider(client, settings)
             yield
 
     app = FastAPI(title='걸을만한데? API', lifespan=lifespan)
@@ -49,7 +51,7 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
                       endX: Longitude, endY: Latitude):
         if (startX, startY) == (endX, endY):
             raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
-        return await request.app.state.odsay.compare(startX, startY, endX, endY)
+        return await request.app.state.router.compare(startX, startY, endX, endY)
 
     return app
 
