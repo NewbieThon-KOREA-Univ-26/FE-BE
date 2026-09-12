@@ -1,4 +1,4 @@
-import type { Coordinate, CompareResponse, TransitInfo, WalkInfo } from '../types/api'
+import type { Coordinate, CompareResponse, TransitInfo, TransitRouteStep, WalkInfo } from '../types/api'
 import { ApiError } from './client'
 
 const API_URL = 'https://api.odsay.com/v1/api'
@@ -63,6 +63,40 @@ function loadLaneMapObject(value: string): string {
   const coordinateBaseEnd = value.indexOf('@')
   const hasCoordinateBase = coordinateBaseEnd >= 0 && firstSegment.split(':').length === 2
   return hasCoordinateBase ? `0:0${value.slice(coordinateBaseEnd)}` : `0:0@${value}`
+}
+
+function parseTransitRouteSteps(sections: JsonObject[]): TransitRouteStep[] | undefined {
+  const steps = sections.flatMap((section) => {
+    const trafficType = Number(section.trafficType)
+    if (trafficType !== 1 && trafficType !== 2) return []
+
+    const stations = (() => {
+      const stopList = section.passStopList
+      if (!stopList || typeof stopList !== 'object' || Array.isArray(stopList)) return []
+      const values = (stopList as JsonObject).stations
+      return Array.isArray(values) ? values : []
+    })()
+    const stationNames = stations.map((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return ''
+      const station = value as JsonObject
+      return String(station.stationName ?? station.name ?? '').trim()
+    }).filter(Boolean)
+    const laneValue = section.lane
+    const lane = Array.isArray(laneValue) ? laneValue[0] : laneValue
+    const lineName = lane && typeof lane === 'object' && !Array.isArray(lane)
+      ? String((lane as JsonObject).name ?? (lane as JsonObject).busNo ?? '').trim()
+      : String(section.laneName ?? '').trim()
+    const fromName = String(section.startName ?? stationNames[0] ?? '').trim()
+    const toName = String(section.endName ?? stationNames[stationNames.length - 1] ?? '').trim()
+    if (!fromName && !toName && !lineName) return []
+    return [{
+      mode: trafficType === 1 ? 'subway' as const : 'bus' as const,
+      lineName: lineName || undefined,
+      fromName: fromName || undefined,
+      toName: toName || undefined,
+    }]
+  })
+  return steps.length > 0 ? steps : undefined
 }
 
 function providerError(data: JsonObject): ApiError | null {
@@ -195,6 +229,7 @@ async function fetchTransit(start: Coordinate, end: Coordinate): Promise<Transit
         walkDistance: asNumber(info.totalWalk),
         walkDuration: walking.reduce((sum, section) => sum + asNumber(section.sectionTime), 0),
         paths: [],
+        routeSteps: parseTransitRouteSteps(sections),
       },
       mapObject: typeof info.mapObj === 'string' ? info.mapObj : null,
     }

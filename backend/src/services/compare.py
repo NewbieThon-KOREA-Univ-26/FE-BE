@@ -28,6 +28,13 @@ class Walk(Geometry):
     path: list[Point] | None = None
 
 
+class TransitRouteStep(BaseModel):
+    mode: Literal['bus', 'subway']
+    lineName: str | None = None
+    fromName: str | None = None
+    toName: str | None = None
+
+
 class Transit(Geometry):
     duration: NonNegative
     fare: Annotated[int, Field(ge=0)]
@@ -36,6 +43,8 @@ class Transit(Geometry):
     walkDuration: NonNegative
     # 대중교통 경로 좌표. 정류장·역 좌표를 이어 만든 근사 폴리라인입니다.
     path: list[Point] | None = None
+    # 대중교통 탑승 구간별 간단한 승차·하차 안내입니다.
+    routeSteps: list[TransitRouteStep] | None = None
 
 
 class Savings(BaseModel):
@@ -121,6 +130,46 @@ def transit_path(sections) -> list[Point] | None:
             if point:
                 points.append(point)
     return _dedupe(points)
+
+
+def transit_route_steps(sections) -> list[TransitRouteStep] | None:
+    """ODsay 구간에서 버스·지하철 승차/하차 안내를 추출합니다."""
+    if not isinstance(sections, list):
+        return None
+    result: list[TransitRouteStep] = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        traffic_type = section.get('trafficType')
+        if traffic_type not in (1, 2):
+            continue
+        stop_list = section.get('passStopList') or {}
+        stations = stop_list.get('stations') if isinstance(stop_list, dict) else None
+        station_names = [
+            str(station.get('stationName') or station.get('name') or '').strip()
+            for station in stations or []
+            if isinstance(station, dict)
+        ]
+        station_names = [name for name in station_names if name]
+        lane = section.get('lane')
+        if isinstance(lane, list):
+            lane = lane[0] if lane else None
+        line_name = ''
+        if isinstance(lane, dict):
+            line_name = str(lane.get('name') or lane.get('busNo') or '').strip()
+        if not line_name:
+            line_name = str(section.get('laneName') or '').strip()
+        from_name = str(section.get('startName') or (station_names[0] if station_names else '')).strip()
+        to_name = str(section.get('endName') or (station_names[-1] if station_names else '')).strip()
+        if not line_name and not from_name and not to_name:
+            continue
+        result.append(TransitRouteStep(
+            mode='subway' if traffic_type == 1 else 'bus',
+            lineName=line_name or None,
+            fromName=from_name or None,
+            toName=to_name or None,
+        ))
+    return result or None
 
 
 def walk_path(path) -> list[Point] | None:
@@ -217,6 +266,7 @@ class Odsay:
                     transfers=boardings - 1, walkDistance=info['totalWalk'],
                     walkDuration=sum(s['sectionTime'] for s in walking),
                     path=transit_path(sections),
+                    routeSteps=transit_route_steps(sections),
                 ), info.get('mapObj')))
             selected, map_object = min(candidates, key=lambda p: (
                 p[0].duration, p[0].fare, p[0].transfers))

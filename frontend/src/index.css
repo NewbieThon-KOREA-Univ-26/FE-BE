@@ -425,6 +425,110 @@ input {
 .weather-summary strong { color: var(--text); }
 .weather-summary small { margin-left: auto; }
 
+.detail-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-tabs button {
+  flex: 1;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.detail-tabs button.is-active {
+  background: var(--transit-soft);
+  color: var(--transit);
+  font-weight: 700;
+}
+
+.transit-route {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.compare-card.is-clickable,
+.transit-route.is-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.compare-card.is-clickable:hover,
+.compare-card.is-clickable:focus-visible,
+.transit-route.is-clickable:hover,
+.transit-route.is-clickable:focus-visible {
+  border-color: var(--transit);
+  box-shadow: 0 4px 14px rgb(37 99 235 / 12%);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.transit-card-hint {
+  display: block;
+  margin-top: 12px;
+  color: var(--transit);
+  font-size: 11px;
+}
+
+.transit-route-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.transit-route-header strong { color: var(--transit); }
+.transit-route-header span { color: var(--muted); font-size: 12px; }
+
+.transit-route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.transit-route-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.transit-route-list li:last-child { padding-bottom: 0; border-bottom: 0; }
+
+.transit-mode {
+  flex: 0 0 auto;
+  min-width: 42px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.transit-mode-subway { background: #e7f0ff; color: #2563eb; }
+.transit-mode-bus { background: #e9f8ef; color: #16834b; }
+
+.transit-route-list li strong { font-size: 14px; }
+.transit-route-list li p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.transit-route-empty { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
 .compare-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -18,6 +18,7 @@ interface Props {
 export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [searchHidden, setSearchHidden] = useState(false)
+  const [detailTab, setDetailTab] = useState<'comparison' | 'transit'>('comparison')
   const [dragOffset, setDragOffset] = useState(0)
   const dragStart = useRef<{ id: number; y: number } | null>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -56,6 +57,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
     } else {
       capturePosition()
       setSearchHidden(true)
+      setDetailTab('comparison')
       setExpanded(true)
     }
   }
@@ -180,29 +182,81 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
           </dl>
         </article>
 
-        <article className={`compare-card card-transit ${walkRecommended ? '' : 'is-recommended'}`}>
-          <h3>🚇 대중교통</h3>
-          <dl>
-            <div>
-              <dt>소요시간</dt>
-              <dd>{formatMinutes(transit.duration)}</dd>
-            </div>
-            <div>
-              <dt>요금</dt>
-              <dd>{formatWon(transit.fare)}</dd>
-            </div>
-            <div>
-              <dt>환승</dt>
-              <dd>{transit.transfers}회</dd>
-            </div>
-            <div>
-              <dt>포함된 도보</dt>
-              <dd>
-                {formatDistance(transit.walkDistance)} · {formatMinutes(transit.walkDuration)}
-              </dd>
-            </div>
-          </dl>
-        </article>
+        {detailTab === 'comparison' ? (
+          <article
+            className={`compare-card card-transit ${walkRecommended ? '' : 'is-recommended'} ${expanded ? 'is-clickable' : ''}`}
+            role={expanded ? 'button' : undefined}
+            tabIndex={expanded ? 0 : undefined}
+            onClick={() => { if (expanded) setDetailTab('transit') }}
+            onKeyDown={(event) => {
+              if (expanded && (event.key === 'Enter' || event.key === ' ')) {
+                event.preventDefault()
+                setDetailTab('transit')
+              }
+            }}
+          >
+            <h3>🚇 대중교통</h3>
+            <dl>
+              <div>
+                <dt>소요시간</dt>
+                <dd>{formatMinutes(transit.duration)}</dd>
+              </div>
+              <div>
+                <dt>요금</dt>
+                <dd>{formatWon(transit.fare)}</dd>
+              </div>
+              <div>
+                <dt>환승</dt>
+                <dd>{transit.transfers}회</dd>
+              </div>
+              <div>
+                <dt>포함된 도보</dt>
+                <dd>
+                  {formatDistance(transit.walkDistance)} · {formatMinutes(transit.walkDuration)}
+                </dd>
+              </div>
+            </dl>
+            {expanded && <small className="transit-card-hint">눌러서 경로 보기</small>}
+          </article>
+        ) : (
+          <div
+            className="transit-route is-clickable"
+            role="button"
+            tabIndex={0}
+            aria-label="다시 누르면 대중교통 정보 카드로 돌아가기"
+            onClick={() => setDetailTab('comparison')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setDetailTab('comparison')
+              }
+            }}
+          >
+          <div className="transit-route-header">
+            <strong>대중교통 경로</strong>
+            <span>{formatMinutes(transit.duration)} · 환승 {transit.transfers}회</span>
+          </div>
+          {transit.routeSteps?.length ? (
+            <ol className="transit-route-list">
+              {transit.routeSteps.map((step, index) => (
+                <li key={`${step.mode}-${step.lineName ?? 'route'}-${index}`}>
+                  <span className={`transit-mode transit-mode-${step.mode}`} aria-hidden="true">
+                    {step.mode === 'subway' ? '지하철' : '버스'}
+                  </span>
+                  <div>
+                    <strong>{step.lineName ?? (step.mode === 'subway' ? '지하철' : '버스')}</strong>
+                    {(step.fromName || step.toName) && (
+                      <p>{step.fromName ?? '승차 지점'} <span aria-hidden="true">→</span> {step.toName ?? '하차 지점'}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="transit-route-empty">역 이름 정보를 제공하지 않는 경로입니다. 지도에서 대중교통 경로를 확인해 주세요.</p>
+          )}
+          </div>
+        )}
       </div>
 
       {expanded && (
