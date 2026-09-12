@@ -21,9 +21,8 @@ class Settings(BaseSettings):
     kakao_walk_path: str = '/v2/routing/pedestrian'
     # 요청 쿼리 틀. 문서의 파라미터 이름이 다르면 배포 환경변수로만 바꿉니다.
     # {sx} {sy} {ex} {ey} 자리에 출발·도착 경도·위도가 들어갑니다.
-    # 예) origin={sx},{sy}&destination={ex},{ey}
-    kakao_transit_query: str = 'sx={sx}&sy={sy}&ex={ex}&ey={ey}'
-    kakao_walk_query: str = 'sx={sx}&sy={sy}&ex={ex}&ey={ey}'
+    kakao_transit_query: str = 'start_x={sx}&start_y={sy}&end_x={ex}&end_y={ey}'
+    kakao_walk_query: str = 'start_x={sx}&start_y={sy}&end_x={ex}&end_y={ey}'
 
     odsay_api_key: SecretStr = SecretStr('')
 
