@@ -12,14 +12,21 @@ export interface KakaoLatLngBounds {
   extend(latlng: KakaoLatLng): void
 }
 
+export interface KakaoPoint {
+  x: number
+  y: number
+}
+
+export interface KakaoMapProjection {
+  containerPointFromCoords(latlng: KakaoLatLng): KakaoPoint
+  coordsFromContainerPoint(point: KakaoPoint): KakaoLatLng
+}
+
 export interface KakaoMap {
-  getProjection(): {
-    containerPointFromCoords(coords: KakaoLatLng): { x: number; y: number }
-    coordsFromContainerPoint(point: { x: number; y: number }): KakaoLatLng
-  }
   getCenter(): KakaoLatLng
+  getProjection(): KakaoMapProjection
   getLevel(): number
-  jump(center: KakaoLatLng, level: number, options?: { animate: boolean | { duration: number } }): void
+  jump(center: KakaoLatLng, level: number, options?: { animate?: boolean | { duration: number } }): void
   setCenter(latlng: KakaoLatLng): void
   panBy(dx: number, dy: number): void
   setBounds(bounds: KakaoLatLngBounds, paddingTop?: number, paddingRight?: number, paddingBottom?: number, paddingLeft?: number): void
@@ -27,6 +34,10 @@ export interface KakaoMap {
 }
 
 export interface KakaoMarker {
+  setMap(map: KakaoMap | null): void
+}
+
+export interface KakaoPolyline {
   setMap(map: KakaoMap | null): void
 }
 
@@ -49,12 +60,16 @@ export interface KakaoPlacesService {
 
 export interface KakaoSdk {
   maps: {
-    Point: new (x: number, y: number) => { x: number; y: number }
     load(callback: () => void): void
     LatLng: new (lat: number, lng: number) => KakaoLatLng
+    Point: new (x: number, y: number) => KakaoPoint
     LatLngBounds: new () => KakaoLatLngBounds
     Map: new (container: HTMLElement, options: { center: KakaoLatLng; level: number }) => KakaoMap
     Marker: new (options: { position: KakaoLatLng; map?: KakaoMap }) => KakaoMarker
+    Polyline: new (options: {
+      map: KakaoMap; path: KakaoLatLng[]; strokeWeight: number;
+      strokeColor: string; strokeOpacity: number; strokeStyle: string;
+    }) => KakaoPolyline
     services: {
       Status: { OK: string; ZERO_RESULT: string; ERROR: string }
       Places: new () => KakaoPlacesService
