@@ -75,8 +75,10 @@ class KakaoTests(unittest.TestCase):
         for request in self.calls:
             self.assertEqual(request.headers['Authorization'], 'KakaoAK kakao-key')
             self.assertEqual(request.url.host, 'dapi.kakao.com')
-            self.assertEqual(request.url.params['sx'], '127.0276')
-            self.assertEqual(request.url.params['ey'], '37.51')
+            self.assertEqual(dict(request.url.params), {
+                'start_x': '127.0276', 'start_y': '37.4979',
+                'end_x': '127.04', 'end_y': '37.51',
+            })
 
     def test_seconds_are_converted_to_minutes(self):
         # 초로 오는 API 도 있어 큰 값은 초로 보고 분으로 바꿉니다.
