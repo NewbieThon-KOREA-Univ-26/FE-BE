@@ -52,6 +52,15 @@ export interface Recommendation {
   choice: RecommendationChoice
   /** 결과 화면의 한 줄 결론에 그대로 출력합니다. */
   reason: string
+  /** 날씨를 반영한 추가 추천 이유. 예: 비가 와서 대중교통을 추천합니다. */
+  weatherReason?: string
+}
+
+export interface WeatherInfo {
+  condition: string
+  iconUrl?: string
+  temperatureC?: number
+  precipitationProbability?: number
 }
 
 export interface CompareResponse {
@@ -59,6 +68,7 @@ export interface CompareResponse {
   transit: TransitInfo
   savings: Savings
   recommendation: Recommendation
+  weather?: WeatherInfo
 }
 
 /** 화면이 안내 문구를 고를 때 쓰는 에러 코드. ErrorBanner 의 표와 짝을 이룹니다. */

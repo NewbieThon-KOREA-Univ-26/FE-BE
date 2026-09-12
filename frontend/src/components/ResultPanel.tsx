@@ -64,6 +64,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
     setSearchHidden(false)
   }
   const { walk, transit, savings, recommendation } = data
+  const weather = data.weather
   const walkRecommended = recommendation.choice === 'walk'
 
   return (
@@ -131,8 +132,28 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
 
       <p className="result-conclusion">
         <strong>{walkRecommended ? '걷는 걸 추천합니다' : '타는 게 낫습니다'}</strong>
-        <span>{recommendation.reason}</span>
+        <span>
+          {recommendation.reason}
+          {expanded && recommendation.weatherReason && ` · ${recommendation.weatherReason}`}
+        </span>
       </p>
+
+      {expanded && weather && (
+        <div className="weather-summary">
+          {weather.iconUrl ? (
+            <img src={weather.iconUrl} alt="" />
+          ) : (
+            <span className="weather-emoji" aria-hidden="true">
+              {weather.condition.includes('비') ? '🌧️' : weather.condition.includes('눈') ? '❄️' : '☀️'}
+            </span>
+          )}
+          <span>현재 날씨: {weather.condition}</span>
+          {weather.temperatureC !== undefined && <strong>{weather.temperatureC}°C</strong>}
+          {weather.precipitationProbability !== undefined && (
+            <small>강수확률 {weather.precipitationProbability}%</small>
+          )}
+        </div>
+      )}
 
       <div className="compare-grid">
         <article className={`compare-card card-walk ${walkRecommended ? 'is-recommended' : ''}`}>
@@ -184,33 +205,37 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
         </article>
       </div>
 
-      <p className="status">지도: 빨간색은 도보 · 파란색은 버스·지하철 탑승 구간입니다.</p>
-      {[walk.geometryWarning, transit.geometryWarning].filter(Boolean).map((message) => (
-        <p className="status" role="status" key={message}>{message}</p>
-      ))}
-      {!walk.paths?.length && !transit.paths?.length && !walk.geometryWarning && !transit.geometryWarning && (
-        <p className="status">이 결과에는 지도 경로가 없습니다. 거리·시간 비교를 참고해 주세요.</p>
+      {expanded && (
+        <>
+          <p className="status">지도: 빨간색은 도보 · 파란색은 버스·지하철 탑승 구간입니다.</p>
+          {[walk.geometryWarning, transit.geometryWarning].filter(Boolean).map((message) => (
+            <p className="status" role="status" key={message}>{message}</p>
+          ))}
+          {!walk.paths?.length && !transit.paths?.length && !walk.geometryWarning && !transit.geometryWarning && (
+            <p className="status">이 결과에는 지도 경로가 없습니다. 거리·시간 비교를 참고해 주세요.</p>
+          )}
+
+          <a className="odsay-attribution" href="https://www.odsay.com" target="_blank" rel="noreferrer">
+            powered by www.ODsay.com
+          </a>
+
+          <div className="result-actions">
+            {savings.amount > 0 && (
+              <button
+                type="button"
+                className={`primary walk-choice ${rewarded ? 'is-done' : ''}`}
+                onClick={onWalkChosen}
+                disabled={rewarded}
+              >
+                {rewarded ? '적립했어요' : `🚶 걸어갈래요 (+${formatWon(savings.amount)})`}
+              </button>
+            )}
+            <button type="button" className="secondary" onClick={onReset}>
+              다시 검색
+            </button>
+          </div>
+        </>
       )}
-
-      <a className="odsay-attribution" href="https://www.odsay.com" target="_blank" rel="noreferrer">
-        powered by www.ODsay.com
-      </a>
-
-      <div className="result-actions">
-        {savings.amount > 0 && (
-          <button
-            type="button"
-            className={`primary walk-choice ${rewarded ? 'is-done' : ''}`}
-            onClick={onWalkChosen}
-            disabled={rewarded}
-          >
-            {rewarded ? '적립했어요' : `🚶 걸어갈래요 (+${formatWon(savings.amount)})`}
-          </button>
-        )}
-        <button type="button" className="secondary" onClick={onReset}>
-          다시 검색
-        </button>
-      </div>
     </section>
   )
 }

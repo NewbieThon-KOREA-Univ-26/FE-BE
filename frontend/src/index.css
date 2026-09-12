@@ -46,8 +46,10 @@
   --radius-lg: 20px;
 
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow: 0 2px 6px rgba(15, 23, 42, 0.07), 0 8px 20px -8px rgba(15, 23, 42, 0.16);
-  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12), 0 24px 48px -16px rgba(15, 23, 42, 0.24);
+  --shadow: 0 2px 6px rgba(15, 23, 42, 0.07),
+    0 8px 20px -8px rgba(15, 23, 42, 0.16);
+  --shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12),
+    0 24px 48px -16px rgba(15, 23, 42, 0.24);
 
   /* 여백 */
   --gap: 16px;
@@ -69,8 +71,8 @@ body,
 
 body {
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', Pretendard, 'Noto Sans KR',
-    'Malgun Gothic', sans-serif;
+    -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', Pretendard,
+    'Noto Sans KR', 'Malgun Gothic', sans-serif;
   font-size: 15px;
   line-height: 1.5;
   color: var(--text);
@@ -163,7 +165,11 @@ input {
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.06s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.06s,
+    box-shadow 0.15s;
 }
 
 .primary {
@@ -246,7 +252,9 @@ input {
   border-radius: var(--radius-sm);
   background: #fff;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .field input::placeholder {
@@ -448,6 +456,46 @@ input {
   color: var(--muted);
 }
 
+.brand-logo {
+  display: block;
+  width: min(100%, 300px);
+  height: 88px;
+  object-fit: cover;
+  object-position: center 52%;
+  transform: translateX(-42px) scale(1.02);
+  transform-origin: center;
+  margin: -6px 0 4px;
+}
+
+.weather-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f7fa;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.weather-summary img,
+.weather-emoji {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  object-fit: contain;
+  font-size: 24px;
+  line-height: 28px;
+}
+
+.weather-summary strong {
+  color: var(--text);
+}
+
+.weather-summary small {
+  margin-left: auto;
+}
+
 .compare-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -478,7 +526,6 @@ input {
   color: var(--transit);
 }
 
-/* 추천되는 쪽을 테두리와 배지로 구분합니다. */
 .compare-card.is-recommended {
   border-width: 2px;
   padding: 13px;
@@ -504,7 +551,6 @@ input {
   letter-spacing: 0.02em;
 }
 
-/* currentColor 를 쓰면 위에서 지정한 흰 글자색과 같아져 배지가 사라집니다. */
 .card-walk.is-recommended h3::after {
   background: var(--walk);
 }
@@ -530,6 +576,8 @@ input {
 .compare-card dt {
   font-size: 12px;
   color: var(--muted);
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .compare-card dd {
@@ -538,11 +586,6 @@ input {
   text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-}
-
-.compare-card dt {
-  flex: 0 1 auto;
-  min-width: 0;
 }
 
 .result-actions {
@@ -678,7 +721,6 @@ input {
   line-height: 1.45;
 }
 
-/* 오류 안내 안의 버튼도 다른 보조 버튼과 같은 모양으로 맞춥니다. */
 .map-overlay button {
   padding: 9px 14px;
   border: 1px solid var(--line-strong);
@@ -819,13 +861,25 @@ input {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes pop-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.97); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ==========================================================================
@@ -853,7 +907,6 @@ input {
     height: 100dvh;
   }
 
-  /* 레이어 자체는 투명하고 클릭을 통과시킵니다. 자식만 받습니다. */
   .panel-side {
     position: absolute;
     inset: 0 0 auto;
@@ -868,7 +921,6 @@ input {
     pointer-events: none;
   }
 
-  /* --- 검색 카드 --- */
   .search-panel {
     position: absolute;
     z-index: 3;
@@ -881,15 +933,16 @@ input {
     border-bottom: 1px solid var(--line);
     box-shadow: var(--shadow);
     pointer-events: auto;
-    transition: transform 320ms var(--ease), opacity 240ms ease, visibility 320ms;
+    transition:
+      transform 320ms var(--ease),
+      opacity 240ms ease,
+      visibility 320ms;
   }
 
   .app-header h1 {
     font-size: 19px;
   }
 
-  /* 모바일에서는 세로 공간이 귀합니다. 설명 문구는 감추고 제목만 둡니다.
-     입력칸 두 개가 바로 아래 있어 무엇을 하는 화면인지 충분히 전달됩니다. */
   .app-header p {
     display: none;
   }
@@ -922,7 +975,6 @@ input {
     grid-column: 1 / -1;
   }
 
-  /* 접기 */
   .route-form-shell.is-hidden {
     min-height: 30px;
   }
@@ -975,7 +1027,6 @@ input {
     cursor: wait;
   }
 
-  /* 결과를 펼치면 검색 카드를 위로 치웁니다. */
   .panel-side:has(.result.is-search-hidden) .search-panel {
     opacity: 0;
     transform: translateY(-110%);
@@ -983,7 +1034,6 @@ input {
     pointer-events: none;
   }
 
-  /* --- 결과 카드 (접힌 상태: 지도 위 요약) --- */
   .panel-side .result {
     position: absolute;
     z-index: 3;
@@ -1001,14 +1051,24 @@ input {
   }
 
   .panel-side .result:not(.is-expanded) .compare-grid,
+  .panel-side .result:not(.is-expanded) > .secondary,
   .panel-side .result:not(.is-expanded) .result-conclusion,
   .panel-side .result:not(.is-expanded) .result-actions,
   .panel-side .result:not(.is-expanded) .status,
+  .panel-side .result:not(.is-expanded) .weather-summary,
   .panel-side .result:not(.is-expanded) .odsay-attribution {
     display: none;
   }
 
-  /* 요약 카드는 히어로 자체가 카드가 됩니다. */
+  .panel-side .result:not(.is-expanded) {
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .panel-side .result:not(.is-expanded) .result-hero {
     padding: 16px 18px 14px;
     border-radius: var(--radius-lg);
@@ -1027,7 +1087,6 @@ input {
     font-weight: 600;
   }
 
-  /* --- 결과 카드 (펼친 상태: 바텀 시트) --- */
   .panel-side .result.is-expanded {
     position: fixed;
     inset: auto 0 0;
@@ -1116,7 +1175,6 @@ input {
     pointer-events: auto;
   }
 
-  /* 모바일 자잘한 크기 조정 */
   .savings-total {
     padding: 9px 11px;
     gap: 8px;
@@ -1151,7 +1209,6 @@ input {
     font-size: 11px;
   }
 
-  /* 결과가 떠 있으면 범례가 가리지 않도록 왼쪽으로 옮깁니다. */
   .app-main:has(.result) .map-legend {
     right: auto;
     left: 12px;
@@ -1159,7 +1216,6 @@ input {
   }
 }
 
-/* 아주 좁은 화면 */
 @media (max-width: 400px) {
   :root {
     --pad: 16px;
@@ -1174,8 +1230,6 @@ input {
   }
 }
 
-/* 한 줄에 안 들어가는 폭에서만 누적 배지를 세로로 쌓습니다.
-   화면 위쪽을 검색 카드가 많이 차지하므로 되도록 한 줄로 둡니다. */
 @media (max-width: 340px) {
   .savings-total {
     align-items: flex-start;
