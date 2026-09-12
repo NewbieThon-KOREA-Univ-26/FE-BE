@@ -101,8 +101,10 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def api_error_handler(request: Request, exc: ApiError):
-        return JSONResponse(status_code=exc.status,
-                            content={'error': {'code': exc.code, 'message': exc.message}})
+        error = {'code': exc.code, 'message': exc.message}
+        if exc.detail:
+            error['detail'] = exc.detail   # 개발자용. 화면은 디버그 모드에서만 보여 줍니다
+        return JSONResponse(status_code=exc.status, content={'error': error})
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):

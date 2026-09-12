@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { isMobileLayout } from '../lib/layout'
 import { hasKakaoKey, loadKakaoSdk } from '../lib/kakao'
 import type { KakaoMap, KakaoMarker, KakaoPolyline } from '../types/kakao'
 import type { CompareResponse } from '../types/api'
@@ -101,7 +102,7 @@ export function MapPanel({ start, end, data }: Props) {
       const canvas = containerRef.current
       if (!canvas) return
       const rect = canvas.getBoundingClientRect()
-      const mobile = window.matchMedia('(max-width: 860px)').matches
+      const mobile = isMobileLayout()
       let top = 40
       let bottom = 24
       let left = 24
@@ -194,7 +195,7 @@ export function MapPanel({ start, end, data }: Props) {
       const canvasRect = canvas.getBoundingClientRect()
       const result = panel?.querySelector<HTMLElement>('.result')
       const legend = layout?.querySelector<HTMLElement>('.map-legend')
-      const mobile = window.matchMedia('(max-width: 860px)').matches
+      const mobile = isMobileLayout()
       const bottom = mobile && result
         ? Math.max(14, canvasRect.bottom - result.getBoundingClientRect().top + 12)
         : 14

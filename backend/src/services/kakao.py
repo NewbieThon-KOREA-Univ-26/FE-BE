@@ -270,16 +270,35 @@ def first_route(data: Any) -> Any:
 
 
 def shape_error(what: str, data: Any) -> ApiError:
-    """어떤 이름으로 왔는지 알 수 있도록 최상위 키를 메시지에 담습니다."""
+    """응답은 왔는데 읽지 못했을 때. 어떤 이름으로 왔는지는 진단(detail)에만 담습니다."""
     keys = ', '.join(sorted(data)[:12]) if isinstance(data, dict) else type(data).__name__
     return ApiError(502, 'UPSTREAM_ERROR',
-                    f'카카오 {what} 응답을 해석하지 못했습니다 (받은 항목: {keys}; 구조: {outline(data)[:900]})')
+                    f'{what} 정보를 읽지 못했어요. 잠시 후 다시 시도해 주세요',
+                    f'카카오 {what} 응답 해석 실패 (받은 항목: {keys}; 구조: {outline(data)[:900]})')
+
+
+# 카카오가 status 로 알려 주는 "경로 없음" 이유. STARTNODES_NULL 은 실제 응답으로 확인했고
+# ENDNODES_NULL 은 그 대칭으로 추정한 이름입니다. 모르는 값은 아래 일반 문장으로 갑니다.
+NO_ROUTE_HINTS = (
+    (('START', 'NULL'), '출발지 근처에 탈 수 있는 정류장·역이 없어요. 출발지를 큰길이나 역 근처로 옮겨 보세요'),
+    (('END', 'NULL'), '도착지 근처에 내릴 수 있는 정류장·역이 없어요. 도착지를 큰길이나 역 근처로 옮겨 보세요'),
+    (('NODES', 'NULL'), '출발지와 도착지 근처에 정류장·역이 없어요. 위치를 큰길이나 역 근처로 옮겨 보세요'),
+)
+
+
+def no_route_message(what: str, data: Any) -> str:
+    status = data.get('status') if isinstance(data, dict) else None
+    text = str(status).upper() if isinstance(status, str) else ''
+    for words, hint in NO_ROUTE_HINTS:
+        if all(word in text for word in words):
+            return hint
+    return f'이 구간은 {what} 경로를 찾지 못했어요. 출발지나 도착지를 조금 옮겨 보세요'
 
 
 def no_route_in(what: str, data: Any) -> ApiError:
-    """경로 목록이 비었거나 못 찾았을 때. 왜인지 보이도록 구조를 담습니다."""
-    return ApiError(404, 'NO_ROUTE',
-                    f'비교할 {what} 경로를 찾을 수 없습니다 (구조: {outline(data)[:900]})')
+    """경로 목록이 비었거나 못 찾았을 때. 왜인지는 진단(detail)에 구조로 담습니다."""
+    return ApiError(404, 'NO_ROUTE', no_route_message(what, data),
+                    f'카카오 {what} 경로 없음 (구조: {outline(data)[:900]})')
 
 
 RAIL_WORDS = ('SUBWAY', 'TRAIN', 'RAIL', 'TRAM')
@@ -426,10 +445,12 @@ class KakaoRouting:
                 response = await self.client.get(url, params=params, headers=headers, timeout=timeout)
         except httpx.TimeoutException as exc:
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회 응답 시간이 초과되었습니다. 다시 시도해 주세요') from exc
+                           '경로 서비스 응답이 늦어요. 잠시 후 다시 시도해 주세요',
+                           f'카카오 {what} 경로 조회 타임아웃 ({self.settings.upstream_timeout_seconds:g}초)') from exc
         except httpx.HTTPError as exc:
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회 서비스에 연결하지 못했습니다') from exc
+                           '경로 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요',
+                           f'카카오 {what} 경로 조회 연결 실패 ({type(exc).__name__})') from exc
 
         target = httpx.URL(url)
         method = 'GET' if style == 'get' else 'POST'
@@ -443,7 +464,8 @@ class KakaoRouting:
         if status >= 400:
             sent = ', '.join(params) or '없음'  # 이름만 담습니다. 값(좌표)은 담지 않습니다.
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회가 실패했습니다 (요청: {where}, 보낸 파라미터: {sent}, '
+                           f'{what} 경로 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요',
+                           f'카카오 {what} 경로 조회 실패 (요청: {where}, 보낸 파라미터: {sent}, '
                            f'카카오 응답 상태: {status}{upstream_detail(response, key)}'
                            f'{STATUS_HINTS.get(status, "")})')
         try:
@@ -453,17 +475,20 @@ class KakaoRouting:
             hint = ('' if target.host == 'dapi.kakao.com' else
                     ' — 문서 페이지 주소가 아니라 dapi.kakao.com 으로 시작하는 API 요청 URL 이어야 합니다')
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회 응답이 JSON 이 아닙니다 '
+                           f'{what} 경로 정보를 읽지 못했어요. 잠시 후 다시 시도해 주세요',
+                           f'카카오 {what} 경로 조회 응답이 JSON 이 아님 '
                            f'(요청: {where}, 상태: {status}, 형식: {kind}){hint}') from exc
         if not isinstance(data, dict):
             raise ApiError(502, 'UPSTREAM_ERROR',
-                           f'카카오 {what} 경로 조회 응답 형식이 예상과 다릅니다 ({type(data).__name__})')
+                           f'{what} 경로 정보를 읽지 못했어요. 잠시 후 다시 시도해 주세요',
+                           f'카카오 {what} 경로 조회 응답 형식이 예상과 다름 ({type(data).__name__})')
         # 카카오는 오류를 본문에 담아 200 으로 주기도 합니다. 숫자 코드만 메시지에 담습니다.
         if 'errorType' in data or ('code' in data and pick(data, ROUTES_KEYS) is None):
             code = data.get('code', data.get('errorType'))
             shown = code if isinstance(code, (int, float)) else str(code)[:40]
             raise ApiError(404, 'NO_ROUTE',
-                           f'비교할 {what} 경로를 찾을 수 없습니다 (카카오 응답 코드: {shown})')
+                           f'이 구간은 {what} 경로를 찾지 못했어요. 출발지나 도착지를 조금 옮겨 보세요',
+                           f'카카오 {what} 응답 코드: {shown}')
         return data
 
     async def raw(self, kind: str, sx, sy, ex, ey) -> dict:

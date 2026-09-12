@@ -90,8 +90,13 @@ def distance_km(sx: float, sy: float, ex: float, ey: float) -> float:
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str):
-        self.status, self.code, self.message = status, code, message
+    """화면에 보여 줄 문장(message)과 개발자용 진단(detail)을 나눕니다.
+
+    message 는 사용자가 읽는 한 문장입니다. 구조 덤프·상태 코드·경로 같은 것은 detail 에만 둡니다.
+    """
+
+    def __init__(self, status: int, code: str, message: str, detail: str | None = None):
+        self.status, self.code, self.message, self.detail = status, code, message, detail
 
 
 def no_route():
@@ -99,7 +104,7 @@ def no_route():
 
 
 def upstream_error():
-    return ApiError(502, 'UPSTREAM_ERROR', '경로 제공 서비스 응답을 확인할 수 없습니다')
+    return ApiError(502, 'UPSTREAM_ERROR', '경로 정보를 가져오지 못했어요. 잠시 후 다시 시도해 주세요')
 
 
 # --- 경로 좌표 추출 -------------------------------------------------------
@@ -374,14 +379,16 @@ def raise_combined(results: dict[str, object]) -> None:
     name, first = failures[0]
     if not isinstance(first, ApiError):
         raise first
+    def describe(label, error):
+        return f'{label}: {error.message}' + (f' — {error.detail}' if error.detail else '')
+
     if len(failures) == len(results):
-        others = [f.message for _, f in failures[1:]
-                  if isinstance(f, ApiError) and f.message != first.message]
-        if others:
-            raise ApiError(first.status, first.code, ' / '.join([first.message, *others]))
-        raise first
+        # 둘 다 실패: 화면에는 첫 문장만, 진단에는 둘 다
+        detail = ' / '.join(describe(label, f) for label, f in failures if isinstance(f, ApiError))
+        raise ApiError(first.status, first.code, first.message, detail)
     succeeded = '·'.join(n for n in results if n != name)
-    raise ApiError(first.status, first.code, f'{first.message} ({succeeded} 조회는 성공)')
+    raise ApiError(first.status, first.code, first.message,
+                   f'{describe(name, first)} ({succeeded} 조회는 성공)')
 
 
 async def gather_and_compare(provider, sx, sy, ex, ey) -> CompareResponse:

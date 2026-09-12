@@ -9,7 +9,7 @@ from src.config.settings import Settings
 from src.main import create_app
 from src.services.ratelimit import RateLimiter, client_key
 from src.services.savings import SavingsLedger
-from tests.test_kakao import PARAMS, transit_route, walk_route
+from tests.test_kakao import error_text, PARAMS, transit_route, walk_route
 
 
 def make_client(calls=None, **overrides):
@@ -93,8 +93,8 @@ class ValidationMessageTests(unittest.TestCase):
             response = client.post('/api/savings/claim', json={})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error']['code'], 'INVALID_INPUT')
-        self.assertIn('문제 항목: voucher', response.json()['error']['message'])
-        self.assertNotIn('경도와 위도', response.json()['error']['message'])
+        self.assertIn('문제 항목: voucher', error_text(response.json()))
+        self.assertNotIn('경도와 위도', error_text(response.json()))
 
 
 class RateLimitTests(unittest.TestCase):

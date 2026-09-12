@@ -39,23 +39,47 @@ const GUIDES: Record<string, Guide> = {
 
 const FALLBACK: Guide = { title: '문제가 생겼습니다', retry: true }
 
+/** 상황을 한눈에 보여 주는 아이콘. 코드·HTTP 상태 같은 딱딱한 표기는 화면에 두지 않습니다. */
+const ICONS: Record<string, string> = {
+  NO_ROUTE: '🧭',
+  TOO_FAR: '📏',
+  SAME_LOCATION: '📍',
+  INVALID_INPUT: '✏️',
+  NETWORK_ERROR: '📡',
+  RATE_LIMITED: '⏳',
+  UPSTREAM_ERROR: '🚧',
+  INTERNAL_ERROR: '🛠️',
+}
+
+/** 개발 서버이거나 주소에 ?debug 가 있을 때만 코드·진단을 접힌 상태로 보여 줍니다. */
+const DEBUG = import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')
+
 export function ErrorBanner({ error, onRetry }: Props) {
   const guide = GUIDES[error.code] ?? FALLBACK
   const showServerMessage = error.message && error.message !== guide.title
 
   return (
     <div className="error" role="alert">
-      <p className="error-title">{guide.title}</p>
+      <div className="error-head">
+        <span className="error-icon" aria-hidden="true">{ICONS[error.code] ?? '⚠️'}</span>
+        <p className="error-title">{guide.title}</p>
+      </div>
       {showServerMessage && <p className="error-detail">{error.message}</p>}
       {guide.hint && <p className="error-hint">{guide.hint}</p>}
-      <p className="error-code">
-        {error.code}
-        {error.status > 0 ? ` · HTTP ${error.status}` : ''}
-      </p>
       {guide.retry && (
         <button type="button" className="secondary" onClick={onRetry}>
           다시 시도
         </button>
+      )}
+      {DEBUG && (
+        <details className="error-debug">
+          <summary>개발자 정보</summary>
+          <p>
+            {error.code}
+            {error.status > 0 ? ` · HTTP ${error.status}` : ''}
+          </p>
+          {error.detail && <pre>{error.detail}</pre>}
+        </details>
       )}
     </div>
   )

@@ -607,7 +607,33 @@ input {
 
 .app-crash h1 { font-size: 20px; margin: 0 0 8px; }
 .app-crash p { color: var(--muted); margin: 0 0 8px; }
-.app-crash .error-code { font-family: ui-monospace, monospace; font-size: 12px; }
+.app-crash .error-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.error-debug {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.error-debug summary { cursor: pointer; }
+.error-debug p { margin: 6px 0 0; font-family: ui-monospace, monospace; }
+.error-debug pre {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 11px;
+}
+
+.error-code { font-family: ui-monospace, monospace; font-size: 12px; }
 .app-crash button { margin-top: 12px; }
 
 .transit-card-hint {
@@ -1114,7 +1140,7 @@ input {
    모바일 (860px 이하) — 지도 위에 뜬 카드 구조
    ========================================================================== */
 
-@media (max-width: 860px) {
+@media (max-width: 860px) and (not ((max-height: 520px) and (orientation: landscape))) {
   html,
   body,
   * {
@@ -1268,6 +1294,27 @@ input {
     transform: translateY(-110%);
     visibility: hidden;
     pointer-events: none;
+  }
+
+  /* 비교 중 · 오류 안내: 검색창(absolute, 위)에 가려지지 않게 결과 시트와 같은 자리(아래 카드)에 둡니다. */
+  .panel-side > .status,
+  .panel-side > .error {
+    position: absolute;
+    z-index: 3;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    margin: 0;
+    pointer-events: auto;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .panel-side > .status {
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: 13px;
+    color: var(--text);
   }
 
   .panel-side .result {
@@ -1499,5 +1546,21 @@ input {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   폰 가로 모드 (높이 520px 이하) — 위 모바일 규칙 대신 데스크톱처럼 왼쪽 패널 + 지도.
+   패널을 좁혀 지도가 보이게 합니다. 판정은 lib/layout.ts 의 MOBILE_QUERY 와 짝입니다.
+   ========================================================================== */
+@media (max-width: 860px) and (max-height: 520px) and (orientation: landscape) {
+  .panel-side {
+    width: min(360px, 46%);
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .app-header p {
+    display: none;
   }
 }
