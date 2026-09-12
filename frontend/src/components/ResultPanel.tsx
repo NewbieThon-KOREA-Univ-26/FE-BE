@@ -18,7 +18,8 @@ interface Props {
 export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [searchHidden, setSearchHidden] = useState(false)
-  const [detailTab, setDetailTab] = useState<'comparison' | 'transit'>('comparison')
+  // 대중교통 카드 아래로 경로 서랍이 열려 있는지. 카드는 걷기 옆에 그대로 남습니다.
+  const [routeOpen, setRouteOpen] = useState(false)
   const [dragOffset, setDragOffset] = useState(0)
   const dragStart = useRef<{ id: number; y: number } | null>(null)
   const sectionRef = useRef<HTMLElement>(null)
@@ -57,7 +58,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
     } else {
       capturePosition()
       setSearchHidden(true)
-      setDetailTab('comparison')
+      setRouteOpen(false)
       setExpanded(true)
     }
   }
@@ -183,19 +184,20 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
           </dl>
         </article>
 
-        {detailTab === 'comparison' ? (
-          <article
-            className={`compare-card card-transit ${walkRecommended ? '' : 'is-recommended'} is-clickable`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setDetailTab('transit')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                setDetailTab('transit')
-              }
-            }}
-          >
+        <article
+          className={`compare-card card-transit ${walkRecommended ? '' : 'is-recommended'} is-clickable ${routeOpen ? 'is-open' : ''}`}
+          role="button"
+          tabIndex={0}
+          aria-expanded={routeOpen}
+          aria-controls="transit-route-drawer"
+          onClick={() => setRouteOpen((open) => !open)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setRouteOpen((open) => !open)
+            }
+          }}
+        >
             <h3>🚇 대중교통</h3>
             <dl>
               <div>
@@ -217,22 +219,17 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
                 </dd>
               </div>
             </dl>
-            <small className="transit-card-hint">눌러서 경로 보기</small>
-          </article>
-        ) : (
-          <div
-            className="transit-route is-clickable"
-            role="button"
-            tabIndex={0}
-            aria-label="다시 누르면 대중교통 정보 카드로 돌아가기"
-            onClick={() => setDetailTab('comparison')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                setDetailTab('comparison')
-              }
-            }}
-          >
+          <small className="transit-card-hint">{routeOpen ? '눌러서 경로 접기' : '눌러서 경로 보기'}</small>
+        </article>
+
+        {/* 경로 서랍: 두 카드 아래에서 자연스럽게 내려옵니다. 높이 애니메이션은 CSS(grid 0fr → 1fr)가 합니다. */}
+        <div
+          id="transit-route-drawer"
+          className={`route-drawer ${routeOpen ? 'is-open' : ''}`}
+          aria-hidden={!routeOpen}
+        >
+          <div className="route-drawer-inner">
+          <div className="transit-route">
           <div className="transit-route-header">
             <strong>대중교통 경로</strong>
             <span>{formatMinutes(transit.duration)} · 환승 {transit.transfers}회</span>
@@ -262,7 +259,8 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
             <p className="transit-route-empty">역 이름 정보를 제공하지 않는 경로입니다. 지도에서 대중교통 경로를 확인해 주세요.</p>
           )}
           </div>
-        )}
+          </div>
+        </div>
       </div>
 
       {/* 모바일에서 요약만 보일 때 감추는 일은 CSS 가 합니다.

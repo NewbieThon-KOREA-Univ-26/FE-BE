@@ -203,8 +203,10 @@ export function MapPanel({ start, end, data }: Props) {
         scale.style.setProperty('right', '14px', 'important')
         scale.style.setProperty('bottom', `${bottom}px`, 'important')
       }
-      if (mobile && legend) {
-        legend.style.bottom = `${bottom}px`
+      if (legend) {
+        // 모바일에서는 결과 시트 위에 띄우려고 bottom 을 직접 넣습니다.
+        // 데스크톱으로 돌아오면 반드시 지워야 합니다 — 남아 있으면 CSS 의 top 과 함께 걸려 범례가 세로로 늘어납니다.
+        legend.style.bottom = mobile ? `${bottom}px` : ''
       }
     }
 

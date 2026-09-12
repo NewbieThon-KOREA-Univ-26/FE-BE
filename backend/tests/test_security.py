@@ -87,6 +87,16 @@ class SignedSavingsTests(unittest.TestCase):
         self.assertEqual(ledger.total_from(ledger.sign({'saved': 1.5, 'walks': 0})), (0, 0, False))
 
 
+class ValidationMessageTests(unittest.TestCase):
+    def test_non_compare_endpoints_get_a_generic_validation_message(self):
+        with make_client() as client:
+            response = client.post('/api/savings/claim', json={})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error']['code'], 'INVALID_INPUT')
+        self.assertIn('문제 항목: voucher', response.json()['error']['message'])
+        self.assertNotIn('경도와 위도', response.json()['error']['message'])
+
+
 class RateLimitTests(unittest.TestCase):
     def test_bucket_refills_over_time(self):
         limiter = RateLimiter(per_minute=2)

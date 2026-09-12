@@ -97,7 +97,13 @@ export default function App() {
           <div className="search-panel">
             <header className="app-header">
               <div>
-                <img className="brand-logo" src="/logo.png" alt="이 정도면… 걸을만한데?" />
+                <a
+                  className="brand-link"
+                  href={`${window.location.pathname}${window.location.search}`}
+                  aria-label="처음 화면으로 (새로고침)"
+                >
+                  <img className="brand-logo" src="/logo.png" alt="이 정도면… 걸을만한데?" />
+                </a>
                 <p>애매한 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
               </div>
             </header>
