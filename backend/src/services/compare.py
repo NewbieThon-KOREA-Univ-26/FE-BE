@@ -47,6 +47,8 @@ class Transit(Geometry):
     path: list[Point] | None = None
     # 대중교통 탑승 구간별 간단한 승차·하차 안내입니다.
     routeSteps: list[TransitRouteStep] | None = None
+    # 걷는 구간이 별도 step 으로 오지 않아 정류장 좌표 사이 거리로 어림한 경우 true. 화면은 '약' 을 붙입니다.
+    walkEstimated: bool | None = None
 
 
 class Savings(BaseModel):
@@ -57,12 +59,15 @@ class Savings(BaseModel):
 class Recommendation(BaseModel):
     choice: Literal['walk', 'transit']
     reason: str
+    # F6 — 날씨가 추천에 영향을 준 이유. 영향이 없으면 비웁니다.
+    weatherReason: str | None = None
 
 
 class WeatherInfo(BaseModel):
     condition: str
     temperatureC: float | None = None
     precipitationProbability: float | None = None
+    iconUrl: str | None = None
 
 
 class CompareResponse(BaseModel):
@@ -70,7 +75,7 @@ class CompareResponse(BaseModel):
     transit: Transit
     savings: Savings
     recommendation: Recommendation
-    # 현재는 UI 확인용 임시 날씨 정보입니다.
+    # F6 — 출발지 기준 현재 날씨. 키가 없거나 조회에 실패하면 생략됩니다.
     weather: WeatherInfo | None = None
 
 
@@ -407,7 +412,27 @@ def format_distance(meters: float) -> str:
     return f'{round(meters)}m' if meters < 1000 else f'{meters / 1000:.1f}km'
 
 
-def build_comparison(walk: Walk, transit: Transit, settings: Settings) -> CompareResponse:
+BAD_WEATHER_WORDS = ('비', '눈', '소나기', '뇌우', '폭우', '진눈깨비', '우박', '태풍')
+
+
+def weather_penalty(weather: WeatherInfo | None) -> str | None:
+    """걷기를 덜 권할 날씨면 그 이유를, 아니면 None. 기능 명세서 F6 '비·더위면 걷기를 덜 권한다'."""
+    if weather is None:
+        return None
+    text = weather.condition or ''
+    if any(word in text for word in BAD_WEATHER_WORDS):
+        return f'지금 {text}'
+    if weather.precipitationProbability is not None and weather.precipitationProbability >= 60:
+        return f'강수확률 {weather.precipitationProbability:g}%'
+    if weather.temperatureC is not None and weather.temperatureC >= 30:
+        return f'{weather.temperatureC:g}°C 더위'
+    if weather.temperatureC is not None and weather.temperatureC <= -5:
+        return f'{weather.temperatureC:g}°C 추위'
+    return None
+
+
+def build_comparison(walk: Walk, transit: Transit, settings: Settings,
+                     weather: WeatherInfo | None = None) -> CompareResponse:
     """절감액과 추천을 계산합니다.
 
     "도보로 너무 먼 거리" 와 "너무 가까워서 대중교통이 무의미" 는 에러가 아닙니다.
@@ -415,11 +440,26 @@ def build_comparison(walk: Walk, transit: Transit, settings: Settings) -> Compar
     """
     # 소요시간은 제공자에 따라 소수(초/60)로 올 수 있습니다. 차이는 분 단위로 반올림해 돌려줍니다.
     extra = round(walk.duration - transit.duration)
-    choice = 'walk' if (walk.duration <= settings.walk_max_minutes
-                        and walk.distance <= settings.walk_max_meters) else 'transit'
+    max_minutes, max_meters = settings.walk_max_minutes, settings.walk_max_meters
+    walkable = walk.duration <= max_minutes and walk.distance <= max_meters
+    # 날씨가 나쁘면 걷기 기준을 절반으로 낮춥니다. 짧은 거리는 여전히 걷기를 권합니다.
+    penalty = weather_penalty(weather)
+    weather_reason = None
+    if penalty:
+        max_minutes, max_meters = max_minutes / 2, max_meters / 2
+        walkable_now = walk.duration <= max_minutes and walk.distance <= max_meters
+        if walkable and not walkable_now:
+            weather_reason = f'{penalty}라 오늘은 타는 걸 권해요'
+        elif walkable_now:
+            weather_reason = f'{penalty}지만 짧은 거리라 걸을 만해요'
+        else:
+            weather_reason = f'{penalty}'
+        walkable = walkable_now
+    choice = 'walk' if walkable else 'transit'
+    walk_text = f'도보 {format_minutes(walk.duration)}·{format_distance(walk.distance)}'
     if choice == 'transit':
-        reason = (f'도보 {format_minutes(walk.duration)}·{format_distance(walk.distance)}로 '
-                  '걷기 추천 기준을 초과합니다')
+        reason = (f'{walk_text}로 오늘 날씨에는 걷기를 권하지 않아요' if weather_reason and '타는 걸' in weather_reason
+                  else f'{walk_text}로 걷기 추천 기준을 초과합니다')
     else:
         time = f'{format_minutes(extra)} 더 걸리지만' if extra > 0 else (
             f'{format_minutes(-extra)} 더 빠르고' if extra < 0 else '같은 시간이 걸리고')
@@ -427,6 +467,6 @@ def build_comparison(walk: Walk, transit: Transit, settings: Settings) -> Compar
     return CompareResponse(
         walk=walk, transit=transit,
         savings=Savings(amount=transit.fare, extraMinutes=extra),
-        recommendation=Recommendation(choice=choice, reason=reason),
-        weather=WeatherInfo(condition='맑음', temperatureC=23, precipitationProbability=10),
+        recommendation=Recommendation(choice=choice, reason=reason, weatherReason=weather_reason),
+        weather=weather,
     )

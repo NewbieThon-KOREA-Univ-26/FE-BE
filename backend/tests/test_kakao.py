@@ -47,7 +47,7 @@ class KakaoTests(unittest.TestCase):
         self.calls.append(request)
         if self.failure:
             return self.failure(request)
-        body = self.walk if 'pedestrian' in request.url.path else self.transit
+        body = self.walk if request.url.path.endswith(('/pedestrian', '/walk')) else self.transit
         return httpx.Response(200, json=copy.deepcopy(body))
 
     def client(self, key='kakao-key'):
@@ -149,7 +149,7 @@ class KakaoTests(unittest.TestCase):
 
     def test_walk_failure_says_transit_succeeded(self):
         # 도보만 실패하면 대중교통은 됐다는 사실도 같은 메시지에 담습니다.
-        self.failure = lambda req: (httpx.Response(404) if 'pedestrian' in req.url.path
+        self.failure = lambda req: (httpx.Response(404) if req.url.path.endswith(('/pedestrian', '/walk'))
                                     else httpx.Response(200, json=copy.deepcopy(self.transit)))
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
@@ -159,7 +159,7 @@ class KakaoTests(unittest.TestCase):
         self.assertIn('대중교통 조회는 성공', message)
 
     def test_both_failures_are_reported_together(self):
-        self.failure = lambda req: httpx.Response(404 if 'pedestrian' in req.url.path else 400)
+        self.failure = lambda req: httpx.Response(404 if req.url.path.endswith(('/pedestrian', '/walk')) else 400)
         with self.client() as client:
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
@@ -194,7 +194,7 @@ class KakaoTests(unittest.TestCase):
         transit = by_path['/v2/routing/publictraffic']
         self.assertEqual(set(transit), {'origin', 'destination'})
         self.assertEqual(transit['origin'], f"{PARAMS['startX']},{PARAMS['startY']}")
-        walk = by_path['/v2/routing/pedestrian']
+        walk = by_path['/v2/routing/walk']
         self.assertEqual(set(walk), {'startX', 'startY', 'endX', 'endY'})
 
     def test_bad_query_template_is_a_configuration_error(self):
@@ -231,7 +231,7 @@ class KakaoTests(unittest.TestCase):
         self.failure = lambda req: httpx.Response(400)
         with self.client() as client:
             message = client.get('/api/compare', params=PARAMS).json()['error']['message']
-        self.assertIn('dapi.kakao.com/v2/routing/pedestrian', message)
+        self.assertIn('dapi.kakao.com/v2/routing/walk', message)
         self.assertIn('KAKAO_WALK_QUERY', message)
         self.assertNotIn('kakao-key', message)
 
@@ -271,7 +271,7 @@ class KakaoTests(unittest.TestCase):
         self.assertEqual(transit.method, 'POST')
         self.assertEqual(transit.headers['content-type'], 'application/json')
         self.assertEqual(json.loads(transit.content)['start_x'], float(PARAMS['startX']))
-        walk = json.loads(by_path['/v2/routing/pedestrian'].content)
+        walk = json.loads(by_path['/v2/routing/walk'].content)
         self.assertEqual(walk['origin'], f"{PARAMS['startX']},{PARAMS['startY']}")
         self.assertEqual(str(transit.url.query, 'utf-8'), '')
 
@@ -285,7 +285,7 @@ class KakaoTests(unittest.TestCase):
             message = client.get('/api/compare', params=PARAMS).json()['error']['message']
         self.assertEqual(self.calls[0].method, 'POST')
         self.assertIn('application/x-www-form-urlencoded', self.calls[0].headers['content-type'])
-        self.assertIn('POST dapi.kakao.com/v2/routing/pedestrian', message)
+        self.assertIn('POST dapi.kakao.com/v2/routing/walk', message)
 
     def test_shape_error_shows_nested_structure(self):
         # 최상위 이름만으로는 부족합니다. 경로 객체 안의 이름과 작은 값까지 보여 줍니다.
@@ -394,6 +394,55 @@ class KakaoTests(unittest.TestCase):
         with self.client() as client:
             self.assertEqual(client.get('/api/compare', params=near).status_code, 200)
         self.assertEqual(len(self.calls), 2)
+
+    def test_walking_between_vehicle_steps_is_estimated_when_not_given(self):
+        # 실제 응답처럼 걷는 구간이 step 으로 오지 않으면 출발지→첫 정류장, 환승, 마지막 정류장→도착지를 어림합니다.
+        self.transit = {'status': 'OK', 'routes': [{
+            'properties': {'totalTime': 1500, 'transfers': 1, 'fare': {'value': 1500}},
+            'steps': [
+                # 출발지(127.0276,37.4979)에서 약 250m 동쪽에서 승차
+                {'properties': {'type': 'SUBWAY', 'time': 600, 'guidance': '2호선 (A > B)'},
+                 'path': {'points': [[127.0304, 37.4979], [127.0350, 37.5000]]}},
+                # 환승: 앞 구간 끝에서 약 200m 떨어진 곳에서 승차, 도착지(127.04,37.51) 300m 앞에서 하차
+                {'properties': {'type': 'BUS', 'time': 600, 'guidance': '273 (C > D)'},
+                 'path': {'points': [[127.0373, 37.5000], [127.0400, 37.5073]]}},
+            ]}]}
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()['transit']
+        self.assertTrue(body['walkEstimated'])
+        self.assertGreater(body['walkDistance'], 700)   # (250 + 200 + 300) × 1.25 보정 ≈ 940m
+        self.assertLess(body['walkDistance'], 1200)
+        self.assertGreater(body['walkDuration'], 8)
+        self.assertLess(body['walkDuration'], 20)
+
+    def test_explicit_walk_steps_are_exact_and_not_marked_estimated(self):
+        self.transit = {'status': 'OK', 'routes': [{
+            'properties': {'totalTime': 900, 'transfers': 0, 'fare': {'value': 1400}},
+            'steps': [
+                {'properties': {'type': 'WALKING', 'distance': 320, 'time': 300},
+                 'path': {'points': [[127.0276, 37.4979], [127.03, 37.50]]}},
+                {'properties': {'type': 'SUBWAY', 'time': 540, 'guidance': '2호선 (A > B)'},
+                 'path': {'points': [[127.03, 37.50], [127.04, 37.51]]}},
+            ]}]}
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()['transit']
+        self.assertEqual(body['walkDistance'], 320)
+        self.assertEqual(body['walkDuration'], 5)
+        self.assertNotIn('walkEstimated', body)
+
+    def test_walk_step_without_numbers_uses_its_polyline(self):
+        self.transit = {'status': 'OK', 'routes': [{
+            'properties': {'totalTime': 900, 'transfers': 0, 'fare': {'value': 1400}},
+            'steps': [
+                {'properties': {'type': 'WALK'}, 'path': {'points': [[127.0276, 37.4979], [127.0304, 37.4979]]}},
+                {'properties': {'type': 'SUBWAY', 'time': 540},
+                 'path': {'points': [[127.0304, 37.4979], [127.04, 37.51]]}},
+            ]}]}
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()['transit']
+        self.assertTrue(body['walkEstimated'])
+        self.assertAlmostEqual(body['walkDistance'], 247, delta=10)   # 경도 0.0028° ≈ 247m
+        self.assertAlmostEqual(body['walkDuration'], 3.7, delta=0.3)
 
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
