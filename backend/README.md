@@ -66,6 +66,16 @@ SESSION_COOKIE_SECURE=false
 카카오맵 REST API의 대중교통 경로 조회와 도보 경로 조회를 호출합니다.
 두 API 모두 발급 키의 사용 권한이 필요합니다. 실제 계정의 권한·요금·호출 한도는 별도 확인해야 합니다.
 엔드포인트 경로는 `KAKAO_TRANSIT_PATH`, `KAKAO_WALK_PATH` 환경변수로 바꿀 수 있습니다.
+문서의 요청 URL 을 통째로 넣어도 됩니다.
+요청 파라미터 이름은 `KAKAO_TRANSIT_QUERY`, `KAKAO_WALK_QUERY` 로 바꿉니다.
+`{sx}` `{sy}` `{ex}` `{ey}` 자리에 출발·도착 경도·위도가 들어갑니다.
+
+```
+KAKAO_TRANSIT_QUERY=origin={sx},{sy}&destination={ex},{ey}
+```
+
+오류 메시지에는 요청한 호스트·경로와 카카오 응답 상태 코드가 담기므로,
+경로·파라미터 중 무엇이 틀렸는지 화면에서 바로 알 수 있습니다.
 
 - 도시내 대중교통 경로 중 최단시간, 동률이면 최저요금·최소환승 순서로 선택합니다.
 - 요금은 선택 경로의 `payment` 값이며, 별도의 학생 할인 계산은 하지 않습니다.
