@@ -50,6 +50,8 @@ export interface TransitInfo {
   path?: Coordinate[]
   /** 대중교통 탑승 구간별 간단한 승차·하차 안내입니다. */
   routeSteps?: TransitRouteStep[]
+  /** 걷는 구간이 정류장 좌표 사이 거리로 어림된 값이면 true. 화면은 '약' 을 붙입니다. */
+  walkEstimated?: boolean
 }
 
 export interface Savings {

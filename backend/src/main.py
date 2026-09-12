@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import hmac
 import math
@@ -11,7 +12,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from src.config.settings import Settings
-from src.services.compare import ApiError, CompareResponse, Odsay, distance_km
+from src.services.compare import ApiError, CompareResponse, Odsay, build_comparison, distance_km
 from src.services.auth import (
     SESSION_COOKIE,
     STATE_COOKIE,
@@ -20,6 +21,7 @@ from src.services.auth import (
     KakaoAuth,
 )
 from src.services.kakao import KakaoRouting
+from src.services.weather import Weather
 
 Longitude = Annotated[float, Query(ge=-180, le=180, allow_inf_nan=False)]
 Latitude = Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)]
@@ -35,6 +37,7 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
         return {
             'router': provider(client, settings),
             'kakao_auth': KakaoAuth(client, settings),
+            'weather': Weather(client, settings),
         }, client
 
     def service(app: FastAPI, name: str):
@@ -182,7 +185,14 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
             raise ApiError(400, 'TOO_FAR',
                            f'출발지와 도착지가 약 {km:.0f}km 떨어져 있어요. '
                            f'{settings.max_distance_km:g}km 이내 구간만 비교할 수 있습니다')
-        return await service(request.app, 'router').compare(sx, sy, ex, ey)
+        # 날씨는 경로 조회와 나란히 묻고, 못 구하면 없이 갑니다 (F6).
+        result, weather = await asyncio.gather(
+            service(request.app, 'router').compare(sx, sy, ex, ey),
+            service(request.app, 'weather').current(sx, sy),
+        )
+        if weather is None:
+            return result
+        return build_comparison(result.walk, result.transit, settings, weather)
 
     @app.get('/api/debug/upstream/{kind}')
     async def debug_upstream(request: Request, kind: str, startX: Longitude, startY: Latitude,

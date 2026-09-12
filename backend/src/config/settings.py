@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     kakao_rest_api_key: SecretStr = SecretStr('')
     # 엔드포인트 경로. 문서 확인 후 다르면 배포 환경변수로만 고치면 됩니다.
     kakao_transit_path: str = '/v2/routing/publictraffic'
-    kakao_walk_path: str = '/v2/routing/pedestrian'
+    kakao_walk_path: str = '/v2/routing/walk'
     # 요청 쿼리 틀. 문서의 파라미터 이름이 다르면 배포 환경변수로만 바꿉니다.
     # {sx} {sy} {ex} {ey} 자리에 출발·도착 경도·위도가 들어갑니다.
     # 예) origin={sx},{sy}&destination={ex},{ey}
@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     debug_raw_upstream: bool = False
 
     odsay_api_key: SecretStr = SecretStr('')
+
+    # 날씨 (F6). 키가 없으면 날씨 없이 동작합니다. 실패해도 비교는 막지 않습니다.
+    # weatherapi = WeatherAPI.com (한국어 날씨 문구·강수확률·아이콘 제공), openweather = OpenWeatherMap
+    weather_provider: Literal['weatherapi', 'openweather'] = 'weatherapi'
+    weather_api_key: SecretStr = SecretStr('')
+    weather_timeout_seconds: float = Field(default=4, gt=0)
 
     # 카카오 로그인(OAuth) 설정
     kakao_client_secret: SecretStr = SecretStr('')

@@ -283,6 +283,7 @@ def no_route_in(what: str, data: Any) -> ApiError:
 
 
 RAIL_WORDS = ('SUBWAY', 'TRAIN', 'RAIL', 'TRAM')
+VEHICLE_WORDS = ('BUS', 'SUBWAY', 'TRAIN', 'RAIL', 'TRAM', 'FERRY', 'SHIP', 'AIR', 'EXPRESS')
 
 
 def parse_guidance(text: str) -> tuple[str | None, str | None, str | None]:
@@ -333,6 +334,66 @@ def route_steps(steps: Any) -> list[TransitRouteStep] | None:
         return None
     guides = [guide for guide in (route_step(step) for step in steps if isinstance(step, dict)) if guide]
     return guides or None
+
+
+WALK_METERS_PER_MINUTE = 4000 / 60   # 4km/h. 기능 명세서의 기준 속도 논의값(1.2m/s ≈ 4.3km/h)보다 조금 보수적
+GAP_DETOUR = 1.25                     # 직선 거리 → 실제 걷는 거리 보정
+GAP_IGNORE_METERS = 30                # 같은 정류장 안의 오차는 걷기로 치지 않음
+
+
+def haversine_m(a: Point, b: Point) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    lon1, lat1, lon2, lat2 = map(radians, (a.x, a.y, b.x, b.y))
+    h = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
+    return 2 * 6371000.0 * asin(sqrt(h))
+
+
+def polyline_m(points: list[Point]) -> float:
+    return sum(haversine_m(points[i], points[i + 1]) for i in range(len(points) - 1))
+
+
+def walking_summary(route: dict, sx, sy, ex, ey) -> tuple[float, float, bool]:
+    """대중교통 경로 안의 걷는 거리(m)·시간(분)·어림 여부.
+
+    1. type 이 탑승 수단이 아닌 step(WALK 등)의 distance·time 을 더합니다. 값이 없으면 좌표 길이로 채웁니다.
+    2. 걷는 구간이 step 으로 오지 않으면(출발지→첫 정류장, 환승, 마지막 정류장→도착지) 정류장
+       좌표 사이의 직선 거리에 보정계수를 곱해 어림합니다. 이때 walkEstimated 가 true 가 됩니다.
+    """
+    steps = [step for step in (route.get('steps') or []) if isinstance(step, dict)]
+    meters = seconds = 0.0
+    estimated = False
+    cursor = Point(x=sx, y=sy)
+
+    def add_gap(target: Point):
+        nonlocal meters, seconds, estimated
+        gap = haversine_m(cursor, target)
+        if gap > GAP_IGNORE_METERS:
+            walk = gap * GAP_DETOUR
+            meters += walk
+            seconds += walk / WALK_METERS_PER_MINUTE * 60
+            estimated = True
+
+    for step in steps:
+        props = step.get('properties') if isinstance(step.get('properties'), dict) else {}
+        kind = str(props.get('type') or '').upper()
+        points = parse_points(pick(pick(step, ('path',)), ('points',)))
+        if kind and not any(word in kind for word in VEHICLE_WORDS):
+            distance = as_number(props.get('distance'))
+            duration = as_number(props.get('time'))
+            if distance is None:
+                distance = polyline_m(points)
+                estimated = True
+            if duration is None:
+                duration = distance / WALK_METERS_PER_MINUTE * 60
+                estimated = True
+            meters += max(0.0, distance)
+            seconds += max(0.0, duration)
+        elif points:
+            add_gap(points[0])
+        if points:
+            cursor = points[-1]
+    add_gap(Point(x=ex, y=ey))
+    return meters, seconds / 60, estimated
 
 
 class KakaoRouting:
@@ -425,18 +486,16 @@ class KakaoRouting:
         transfers = find_number(route, data, TRANSFER_KEYS) or 0
         walk_distance = find_number(route, data, ('totalWalk', 'walkDistance', 'walk_distance')) or 0
         walk_duration = to_minutes(find_number(route, data, ('totalWalkTime', 'walkTime', 'walk_time'))) or 0
+        walk_estimated = None
         if isinstance(route.get('properties'), dict):
-            steps = route.get('steps')
-            walking = [step['properties'] for step in steps
-                       if isinstance(step, dict) and isinstance(step.get('properties'), dict)
-                       and step['properties'].get('type') == 'WALK'] if isinstance(steps, list) else []
-            walk_distance = sum(max(0, as_number(step.get('distance')) or 0) for step in walking)
-            walk_duration = sum(max(0, as_number(step.get('time')) or 0) for step in walking) / 60
+            walk_distance, walk_duration, estimated = walking_summary(route, sx, sy, ex, ey)
+            walk_estimated = True if estimated else None
         return Transit(
             duration=duration, fare=int(fare), transfers=int(max(0, transfers)),
             walkDistance=max(0.0, walk_distance), walkDuration=max(0.0, walk_duration),
             paths=parse_paths(route),
             routeSteps=route_steps(route.get('steps')) if isinstance(route, dict) else None,
+            walkEstimated=walk_estimated,
         )
 
     async def walk(self, sx, sy, ex, ey) -> Walk:

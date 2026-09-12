@@ -81,6 +81,11 @@ KAKAO_TRANSIT_QUERY=origin={sx},{sy}&destination={ex},{ey}
 `GET /api/debug/upstream/transit?startX=…&startY=…&endX=…&endY=…` (또는 `walk`) 를 엽니다.
 카카오 원본 응답이 그대로 나옵니다. 확인이 끝나면 끕니다.
 
+날씨(F6)는 `WEATHER_API_KEY` 를 넣으면 켜집니다. 기본 제공자는 WeatherAPI.com 이고
+`WEATHER_PROVIDER=openweather` 로 OpenWeatherMap 을 쓸 수 있습니다. 키가 없거나 조회에 실패해도
+비교 결과는 날씨 없이 정상 응답합니다. 비·눈, 강수확률 60% 이상, 30°C 이상, -5°C 이하면
+걷기 추천 기준을 절반으로 낮추고 `recommendation.weatherReason` 에 이유를 담습니다.
+
 출발지·도착지 직선 거리가 `MAX_DISTANCE_KM`(기본 30) 을 넘으면 조회하지 않고 `TOO_FAR`(400) 로 알립니다.
 프론트도 같은 기준으로 요청 전에 막습니다 (`frontend/src/lib/geo.ts`).
 

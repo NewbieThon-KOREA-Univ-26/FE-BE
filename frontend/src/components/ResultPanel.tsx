@@ -213,7 +213,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
               <div>
                 <dt>도보 구간</dt>
                 <dd>
-                  {formatDistance(transit.walkDistance)} · {formatMinutes(transit.walkDuration)}
+                  {transit.walkEstimated ? '약 ' : ''}{formatDistance(transit.walkDistance)} · {formatMinutes(transit.walkDuration)}
                 </dd>
               </div>
             </dl>
