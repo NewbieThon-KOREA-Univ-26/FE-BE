@@ -196,7 +196,7 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
               <dd>{transit.transfers}회</dd>
             </div>
             <div>
-              <dt>포함된 도보</dt>
+              <dt>도보 구간</dt>
               <dd>
                 {formatDistance(transit.walkDistance)} · {formatMinutes(transit.walkDuration)}
               </dd>
