@@ -61,7 +61,7 @@ export interface CompareResponse {
   recommendation: Recommendation
 }
 
-/** 명세서의 에러 코드. 프론트에서만 쓰는 NETWORK_ERROR 는 client.ts 에서 추가합니다. */
+/** 화면이 안내 문구를 고를 때 쓰는 에러 코드. ErrorBanner 의 표와 짝을 이룹니다. */
 export type ApiErrorCode =
   | 'INVALID_INPUT'
   | 'SAME_LOCATION'
@@ -70,10 +70,3 @@ export type ApiErrorCode =
   | 'RATE_LIMITED'
   | 'CONFIGURATION_ERROR'
   | 'SERVICE_NOT_CONFIGURED'
-
-export interface ApiErrorBody {
-  error: {
-    code: ApiErrorCode | string
-    message: string
-  }
-}
