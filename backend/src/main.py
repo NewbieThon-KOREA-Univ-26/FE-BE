@@ -26,18 +26,41 @@ Latitude = Annotated[float, Query(ge=-90, le=90, allow_inf_nan=False)]
 def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     settings = settings or Settings()
 
+    def build_services():
+        """이번 요청들이 함께 쓸 외부 호출 객체를 만듭니다."""
+        client = httpx.AsyncClient(transport=transport)
+        provider = KakaoRouting if settings.route_provider == 'kakao' else Odsay
+        return {
+            'router': provider(client, settings),
+            'kakao_auth': KakaoAuth(client, settings),
+        }, client
+
+    def service(app: FastAPI, name: str):
+        """app.state 에서 객체를 꺼냅니다. 없으면 그때 만듭니다.
+
+        서버리스(Vercel)에서는 ASGI lifespan 이 실행되지 않을 수 있습니다.
+        그러면 app.state 가 비어 있어 요청이 AttributeError 로 죽고 빈 500 이 나갑니다.
+        여기서 없으면 만들어 두어 어느 환경에서도 동작하게 합니다.
+        """
+        value = getattr(app.state, name, None)
+        if value is None:
+            services, _ = build_services()
+            for key, item in services.items():
+                setattr(app.state, key, item)
+            value = getattr(app.state, name)
+        return value
+
     @asynccontextmanager
     async def lifespan(app):
-        async with httpx.AsyncClient(transport=transport) as client:
-from src.services.auth import (
-    SESSION_COOKIE,
-    STATE_COOKIE,
-    STATE_TTL_SECONDS,
-    AuthUser,
-    KakaoAuth,
-)
-from src.services.kakao import KakaoRouting
+        services, client = build_services()
+        for key, item in services.items():
+            setattr(app.state, key, item)
+        try:
             yield
+        finally:
+            await client.aclose()
+            for key in services:
+                setattr(app.state, key, None)
 
     app = FastAPI(title='걸을만한데? API', lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins,
@@ -54,13 +77,22 @@ from src.services.kakao import KakaoRouting
             'code': 'INVALID_INPUT', 'message': '유효한 출발지·도착지 경도와 위도를 입력하세요',
         }})
 
+    @app.exception_handler(Exception)
+    async def unexpected_error_handler(request: Request, exc: Exception):
+        # 빈 500 대신 화면이 안내할 수 있는 형식으로 돌려줍니다.
+        # 예외 메시지에는 키가 섞일 수 있으므로 종류만 남깁니다.
+        return JSONResponse(status_code=500, content={'error': {
+            'code': 'INTERNAL_ERROR',
+            'message': f'서버에서 예기치 못한 오류가 발생했습니다 ({type(exc).__name__})',
+        }})
+
     @app.get('/api/health')
     async def health():
-        return {'status': 'ok'}
+        return {'status': 'ok', 'provider': settings.route_provider}
 
     @app.get('/api/auth/kakao/login')
     async def kakao_login(request: Request):
-        auth: KakaoAuth = request.app.state.kakao_auth
+        auth: KakaoAuth = service(request.app, 'kakao_auth')
         state = auth.new_state()
         response = RedirectResponse(auth.authorization_url(state), status_code=302)
         response.set_cookie(
@@ -77,7 +109,7 @@ from src.services.kakao import KakaoRouting
     @app.get('/api/auth/kakao/callback')
     async def kakao_callback(request: Request, code: str | None = None,
                              state: str | None = None, error: str | None = None):
-        auth: KakaoAuth = request.app.state.kakao_auth
+        auth: KakaoAuth = service(request.app, 'kakao_auth')
         expected_state = request.cookies.get(STATE_COOKIE)
         valid_state = bool(state and expected_state and hmac.compare_digest(state, expected_state))
         if error or not code or not valid_state:
@@ -103,7 +135,7 @@ from src.services.kakao import KakaoRouting
 
     @app.get('/api/auth/me')
     async def current_user(request: Request) -> dict[str, AuthUser | None]:
-        auth: KakaoAuth = request.app.state.kakao_auth
+        auth: KakaoAuth = service(request.app, 'kakao_auth')
         return {'user': auth.read_session(request.cookies.get(SESSION_COOKIE))}
 
     @app.post('/api/auth/logout', status_code=204)
@@ -119,7 +151,7 @@ from src.services.kakao import KakaoRouting
                       endX: Longitude, endY: Latitude):
         if (startX, startY) == (endX, endY):
             raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
-        return await request.app.state.router.compare(startX, startY, endX, endY)
+        return await service(request.app, 'router').compare(startX, startY, endX, endY)
 
     return app
 

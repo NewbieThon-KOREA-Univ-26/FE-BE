@@ -19,6 +19,11 @@ const GUIDES: Record<string, Guide> = {
   UPSTREAM_ERROR: { title: '경로 정보를 가져오지 못했습니다', retry: true },
   RATE_LIMITED: { title: '요청이 너무 많습니다', hint: '잠시 후 다시 시도해 주세요', retry: true },
   CONFIGURATION_ERROR: { title: 'ODsay 인증 설정을 확인해 주세요', retry: false },
+  INTERNAL_ERROR: {
+    title: '서버에서 문제가 생겼습니다',
+    hint: '잠시 후 다시 시도해 주세요. 계속되면 서버 로그를 확인해야 합니다',
+    retry: true,
+  },
   SERVICE_NOT_CONFIGURED: {
     title: '서버에 경로 API 키가 없습니다',
     hint: '백엔드 .env 의 KAKAO_REST_API_KEY 를 채우고, 카카오디벨로퍼스에서 카카오맵 사용 설정을 켰는지 확인하세요',
