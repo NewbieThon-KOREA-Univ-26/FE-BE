@@ -179,6 +179,19 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
             raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
         return await service(request.app, 'router').compare(sx, sy, ex, ey)
 
+    @app.get('/api/debug/upstream/{kind}')
+    async def debug_upstream(request: Request, kind: str, startX: Longitude, startY: Latitude,
+                             endX: Longitude, endY: Latitude):
+        """카카오 원본 응답을 그대로 돌려줍니다. DEBUG_RAW_UPSTREAM=true 일 때만 열립니다.
+
+        해석에 실패했을 때 실제 필드 이름을 확인하는 용도입니다.
+        응답에는 키가 들어 있지 않으므로 노출되는 비밀은 없습니다.
+        """
+        router = service(request.app, 'router')
+        if not settings.debug_raw_upstream or kind not in ('walk', 'transit') or not hasattr(router, 'raw'):
+            raise ApiError(404, 'NOT_FOUND', '진단 엔드포인트가 꺼져 있습니다')
+        return {'kind': kind, 'data': await router.raw(kind, startX, startY, endX, endY)}
+
     # path 나 calories 처럼 값이 없는 선택 필드는 응답에서 아예 빼서
     # 명세서의 "구현 시에만 내려옵니다" 규칙을 지킵니다.
     @app.get('/api/compare', response_model=CompareResponse, response_model_exclude_none=True)

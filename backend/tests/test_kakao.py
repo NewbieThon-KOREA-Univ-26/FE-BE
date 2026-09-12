@@ -244,7 +244,7 @@ class KakaoTests(unittest.TestCase):
             response = client.get('/api/compare', params=PARAMS)
         self.assertEqual(response.status_code, 502)
         message = response.json()['error']['message']
-        self.assertIn('보낸 파라미터: sx, sy, ex, ey', message)
+        self.assertIn('보낸 파라미터: start_x, start_y, end_x, end_y', message)
         self.assertIn('코드 -10', message)
         self.assertIn('origin is required', message)
         self.assertNotIn('kakao-key', message)
@@ -270,7 +270,7 @@ class KakaoTests(unittest.TestCase):
         transit = by_path['/v2/routing/publictraffic']
         self.assertEqual(transit.method, 'POST')
         self.assertEqual(transit.headers['content-type'], 'application/json')
-        self.assertEqual(json.loads(transit.content)['sx'], float(PARAMS['startX']))
+        self.assertEqual(json.loads(transit.content)['start_x'], float(PARAMS['startX']))
         walk = json.loads(by_path['/v2/routing/pedestrian'].content)
         self.assertEqual(walk['origin'], f"{PARAMS['startX']},{PARAMS['startY']}")
         self.assertEqual(str(transit.url.query, 'utf-8'), '')
@@ -286,6 +286,68 @@ class KakaoTests(unittest.TestCase):
         self.assertEqual(self.calls[0].method, 'POST')
         self.assertIn('application/x-www-form-urlencoded', self.calls[0].headers['content-type'])
         self.assertIn('POST dapi.kakao.com/v2/routing/pedestrian', message)
+
+    def test_shape_error_shows_nested_structure(self):
+        # 최상위 이름만으로는 부족합니다. 경로 객체 안의 이름과 작은 값까지 보여 줍니다.
+        self.transit = {'status': {'code': 0}, 'properties': {'totalDistance': 5200},
+                        'routes': [{'summaryInfo': {'elapsed': 1530, 'cost': {'krw': 1500}},
+                                    'legs': [{'mode': 'BUS'}]}]}
+        with self.client() as client:
+            message = client.get('/api/compare', params=PARAMS).json()['error']['message']
+        self.assertIn('구조:', message)
+        for name in ('summaryInfo', 'elapsed: 1530', 'krw: 1500', "mode: 'BUS'", 'totalDistance: 5200'):
+            self.assertIn(name, message)
+
+    def test_empty_routes_reports_structure(self):
+        self.walk = {'status': {'code': 0, 'message': 'no result'}, 'routes': []}
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 404)
+        message = response.json()['error']['message']
+        self.assertIn('도보', message)
+        self.assertIn('routes: [] (0개)', message)
+        self.assertIn("message: 'no result'", message)
+
+    def test_mobility_style_summary_and_roads_are_parsed(self):
+        # 카카오모빌리티 길찾기와 같은 형식(summary 아래 값, sections[].roads[].vertexes)도 읽습니다.
+        self.walk = {'routes': [{'summary': {'distance': 1200, 'duration': 900},
+                                 'sections': [{'roads': [{'vertexes': [127.0, 37.5, 127.01, 37.51]},
+                                                         {'vertexes': [127.01, 37.51, 127.02, 37.52]}]}]}]}
+        self.transit = {'properties': {'totalTime': 25, 'totalFare': 1500, 'transferCount': 1},
+                        'routes': [{'sections': [{'points': [{'x': 127.0, 'y': 37.5}, {'x': 127.02, 'y': 37.52}]}]}]}
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body['walk']['distance'], 1200)
+        self.assertEqual(body['walk']['duration'], 15)
+        self.assertEqual(len(body['walk']['paths'][0]), 4)
+        self.assertEqual(body['transit']['fare'], 1500)
+        self.assertEqual(body['transit']['duration'], 25)
+        self.assertEqual(body['transit']['transfers'], 1)
+
+    def test_wrapped_fare_is_unwrapped_only_when_unambiguous(self):
+        self.transit = {'routes': [{'duration': 20, 'fare': {'currency': 'KRW', 'regular': {'totalFare': 1250}}}]}
+        with self.client() as client:
+            self.assertEqual(client.get('/api/compare', params=PARAMS).json()['transit']['fare'], 1250)
+        self.transit = {'routes': [{'duration': 20, 'fare': {'a': 1, 'b': 2}}]}
+        with self.client() as client:
+            self.assertEqual(client.get('/api/compare', params=PARAMS).status_code, 502)
+
+    def test_debug_upstream_endpoint_is_off_by_default_and_returns_raw_when_on(self):
+        with self.client() as client:
+            self.assertEqual(client.get('/api/debug/upstream/transit', params=PARAMS).status_code, 404)
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='kakao-key',
+                     debug_raw_upstream=True),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            response = client.get('/api/debug/upstream/transit', params=PARAMS)
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()['kind'], 'transit')
+            self.assertEqual(response.json()['data'], self.transit)
+            self.assertNotIn('kakao-key', response.text)
+            self.assertEqual(client.get('/api/debug/upstream/car', params=PARAMS).status_code, 404)
 
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.

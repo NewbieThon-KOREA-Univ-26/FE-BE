@@ -103,6 +103,69 @@ def json_ready(params: dict[str, str]) -> dict[str, Any]:
     return out
 
 
+def outline(value: Any, depth: int = 4) -> str:
+    """응답 구조를 한 줄로 요약합니다. 이름·형태·작은 값만 담고 긴 목록은 첫 항목만 보입니다.
+
+    해석에 실패했을 때 어떤 이름으로 어디에 값이 있는지 한 번에 알기 위해서입니다.
+    """
+    # 이름 단계(딕셔너리)만 깊이를 소모합니다. 목록은 첫 항목을 같은 깊이로, 작은 값은 항상 보입니다.
+    if isinstance(value, dict):
+        if depth <= 0:
+            return '{…}'
+        items = list(value.items())
+        body = ', '.join(f'{k}: {outline(v, depth - 1)}' for k, v in items[:12])
+        more = f', …+{len(items) - 12}' if len(items) > 12 else ''
+        return '{' + body + more + '}'
+    if isinstance(value, list):
+        if not value:
+            return '[] (0개)'
+        return f'[{outline(value[0], depth)} …{len(value)}개]'
+    if isinstance(value, str):
+        return repr(value[:24] + ('…' if len(value) > 24 else ''))
+    return repr(value)
+
+
+# 값이 딕셔너리로 싸여 올 때 (예: fare: {regular: {totalFare: 1500}}) 먼저 볼 이름들.
+NESTED_NUMBER_KEYS = ('total', 'totalFare', 'total_fare', 'regular', 'adult', 'fare',
+                      'value', 'amount', 'taxi', 'seconds', 'minutes')
+
+
+def unwrap_number(value: Any, depth: int = 2) -> float | None:
+    """숫자, 또는 숫자를 감싼 딕셔너리·목록에서 숫자 하나를 꺼냅니다.
+
+    딕셔너리는 알려진 이름을 먼저 보고, 없으면 숫자 값이 딱 하나일 때만 그것을 씁니다.
+    (여러 개면 무엇인지 알 수 없어 고르지 않습니다.)
+    """
+    if isinstance(value, bool):
+        return None
+    number = as_number(value)
+    if number is not None or depth <= 0:
+        return number
+    if isinstance(value, dict):
+        for key in NESTED_NUMBER_KEYS:
+            if key in value:
+                number = unwrap_number(value[key], depth - 1)
+                if number is not None:
+                    return number
+        numbers = [as_number(v) for v in value.values()
+                   if not isinstance(v, bool) and as_number(v) is not None]
+        return numbers[0] if len(numbers) == 1 else None
+    if isinstance(value, list) and value:
+        return unwrap_number(value[0], depth - 1)
+    return None
+
+
+def find_number(route: Any, data: Any, keys: tuple[str, ...]) -> float | None:
+    """경로 객체 → 그 안의 summary → 응답 최상위 properties 순서로 숫자를 찾습니다."""
+    holders = (route, pick(route, ('summary', 'info', 'total')),
+               pick(data, ('properties', 'summary')))
+    for holder in holders:
+        number = unwrap_number(pick(holder, keys))
+        if number is not None:
+            return number
+    return None
+
+
 def pick(source: Any, keys: tuple[str, ...]) -> Any:
     """딕셔너리에서 후보 이름 중 먼저 발견되는 값을 돌려줍니다."""
     if not isinstance(source, dict):
@@ -157,6 +220,10 @@ def parse_paths(route: Any) -> list[list[Point]]:
     if isinstance(sections, list):
         for section in sections:
             points = parse_points(pick(section, POINTS_KEYS))
+            if not points:
+                # 구간 아래 도로 단위(roads[].vertexes)로 쪼개져 오면 이어 붙입니다.
+                for road in pick(section, ('roads', 'links', 'legs', 'steps')) or []:
+                    points.extend(parse_points(pick(road, POINTS_KEYS)))
             if len(points) >= 2:
                 paths.append(points)
     if paths:
@@ -179,7 +246,13 @@ def shape_error(what: str, data: Any) -> ApiError:
     """어떤 이름으로 왔는지 알 수 있도록 최상위 키를 메시지에 담습니다."""
     keys = ', '.join(sorted(data)[:12]) if isinstance(data, dict) else type(data).__name__
     return ApiError(502, 'UPSTREAM_ERROR',
-                    f'카카오 {what} 응답을 해석하지 못했습니다 (받은 항목: {keys})')
+                    f'카카오 {what} 응답을 해석하지 못했습니다 (받은 항목: {keys}; 구조: {outline(data)[:900]})')
+
+
+def no_route_in(what: str, data: Any) -> ApiError:
+    """경로 목록이 비었거나 못 찾았을 때. 왜인지 보이도록 구조를 담습니다."""
+    return ApiError(404, 'NO_ROUTE',
+                    f'비교할 {what} 경로를 찾을 수 없습니다 (구조: {outline(data)[:900]})')
 
 
 class KakaoRouting:
@@ -252,19 +325,26 @@ class KakaoRouting:
                            f'비교할 {what} 경로를 찾을 수 없습니다 (카카오 응답 코드: {shown})')
         return data
 
+    async def raw(self, kind: str, sx, sy, ex, ey) -> dict:
+        """해석하지 않은 카카오 응답. 필드 이름을 확인하는 진단 용도로도 씁니다."""
+        if kind == 'transit':
+            return await self.request('대중교통', self.settings.kakao_transit_path,
+                                      build_query(self.settings.kakao_transit_query, sx, sy, ex, ey))
+        return await self.request('도보', self.settings.kakao_walk_path,
+                                  build_query(self.settings.kakao_walk_query, sx, sy, ex, ey))
+
     async def transit(self, sx, sy, ex, ey) -> Transit:
-        data = await self.request('대중교통', self.settings.kakao_transit_path,
-                                  build_query(self.settings.kakao_transit_query, sx, sy, ex, ey))
+        data = await self.raw('transit', sx, sy, ex, ey)
         route = first_route(data)
         if route is None:
-            raise no_route()
-        duration = to_minutes(pick(route, DURATION_KEYS))
-        fare = as_number(pick(route, FARE_KEYS))
+            raise no_route_in('대중교통', data)
+        duration = to_minutes(find_number(route, data, DURATION_KEYS))
+        fare = find_number(route, data, FARE_KEYS)
         if duration is None or fare is None:
             raise shape_error('대중교통 경로', data)
-        transfers = as_number(pick(route, TRANSFER_KEYS)) or 0
-        walk_distance = as_number(pick(route, ('totalWalk', 'walkDistance', 'walk_distance'))) or 0
-        walk_duration = to_minutes(pick(route, ('totalWalkTime', 'walkTime', 'walk_time'))) or 0
+        transfers = find_number(route, data, TRANSFER_KEYS) or 0
+        walk_distance = find_number(route, data, ('totalWalk', 'walkDistance', 'walk_distance')) or 0
+        walk_duration = to_minutes(find_number(route, data, ('totalWalkTime', 'walkTime', 'walk_time'))) or 0
         return Transit(
             duration=duration, fare=int(fare), transfers=int(max(0, transfers)),
             walkDistance=max(0.0, walk_distance), walkDuration=max(0.0, walk_duration),
@@ -272,13 +352,12 @@ class KakaoRouting:
         )
 
     async def walk(self, sx, sy, ex, ey) -> Walk:
-        data = await self.request('도보', self.settings.kakao_walk_path,
-                                  build_query(self.settings.kakao_walk_query, sx, sy, ex, ey))
+        data = await self.raw('walk', sx, sy, ex, ey)
         route = first_route(data)
         if route is None:
-            raise no_route()
-        distance = as_number(pick(route, DISTANCE_KEYS))
-        duration = to_minutes(pick(route, DURATION_KEYS))
+            raise no_route_in('도보', data)
+        distance = find_number(route, data, DISTANCE_KEYS)
+        duration = to_minutes(find_number(route, data, DURATION_KEYS))
         if distance is None or duration is None:
             raise shape_error('도보 경로', data)
         return Walk(distance=max(0.0, distance), duration=max(0.0, duration),

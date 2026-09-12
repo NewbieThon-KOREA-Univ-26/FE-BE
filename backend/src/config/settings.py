@@ -21,10 +21,15 @@ class Settings(BaseSettings):
     kakao_walk_path: str = '/v2/routing/pedestrian'
     # 요청 쿼리 틀. 문서의 파라미터 이름이 다르면 배포 환경변수로만 바꿉니다.
     # {sx} {sy} {ex} {ey} 자리에 출발·도착 경도·위도가 들어갑니다.
-    
+    # 예) origin={sx},{sy}&destination={ex},{ey}
     kakao_transit_query: str = 'start_x={sx}&start_y={sy}&end_x={ex}&end_y={ey}'
     kakao_walk_query: str = 'start_x={sx}&start_y={sy}&end_x={ex}&end_y={ey}'
-
+    # 파라미터를 어디에 실을지. 'get'(쿼리스트링) | 'post-json' | 'post-form'.
+    # 현재 카카오맵 REST 는 GET 쿼리스트링으로 동작이 확인되어 기본값 그대로 두면 됩니다.
+    kakao_request_style: Literal['get', 'post-json', 'post-form'] = 'get'
+    # true 면 GET /api/debug/upstream/{walk|transit} 로 카카오 원본 응답을 그대로 볼 수 있습니다.
+    # 응답 필드 이름을 확인하는 용도입니다. 키는 응답에 없으므로 노출되지 않습니다.
+    debug_raw_upstream: bool = False
 
     odsay_api_key: SecretStr = SecretStr('')
 
