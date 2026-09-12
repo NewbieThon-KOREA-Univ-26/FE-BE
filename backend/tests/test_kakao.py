@@ -148,3 +148,40 @@ class KakaoTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ServerlessTests(KakaoTests):
+    """Vercel 같은 서버리스에서는 ASGI lifespan 이 실행되지 않을 수 있습니다.
+
+    그 상태에서도 모든 엔드포인트가 동작해야 합니다.
+    (배포에서 FUNCTION_INVOCATION_FAILED 로 500 이 나던 상황)
+    """
+
+    def test_compare_works_without_lifespan(self):
+        # with 를 쓰지 않으면 lifespan 이 실행되지 않습니다.
+        response = self.client().get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()['savings']['amount'], 1400)
+
+    def test_auth_endpoint_works_without_lifespan(self):
+        # 로그인 관련 엔드포인트도 같은 app.state 를 씁니다.
+        response = self.client().get('/api/auth/me')
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertIn('user', response.json())
+
+    def test_health_reports_the_provider(self):
+        self.assertEqual(self.client().get('/api/health').json(),
+                         {'status': 'ok', 'provider': 'kakao'})
+
+    def test_unexpected_error_returns_our_error_shape(self):
+        # 예상 못한 예외도 빈 500 이 아니라 화면이 읽을 수 있는 형식으로 나가야 합니다.
+        def explode(request):
+            raise RuntimeError('boom kakao-key')
+        self.failure = explode
+        client = TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='kakao-key'),
+            httpx.MockTransport(self.handler)), raise_server_exceptions=False)
+        response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()['error']['code'], 'INTERNAL_ERROR')
+        self.assertNotIn('kakao-key', response.text)

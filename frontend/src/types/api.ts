@@ -91,3 +91,4 @@ export type ApiErrorCode =
   | 'RATE_LIMITED'
   | 'CONFIGURATION_ERROR'
   | 'SERVICE_NOT_CONFIGURED'
+  | 'INTERNAL_ERROR'
