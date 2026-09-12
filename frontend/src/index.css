@@ -49,7 +49,7 @@ input {
   width: 100%;
   max-width: none;
   margin: 0 auto;
-  padding: 24px 24px 32px;
+  padding: 0;
 }
 
 .app-header {
@@ -83,7 +83,7 @@ input {
 
 .app-main {
   position: relative;
-  min-height: calc(100vh - 116px);
+  min-height: 100vh;
 }
 
 @media (max-width: 860px) {
@@ -104,18 +104,27 @@ input {
   z-index: 2;
   top: 0;
   left: 0;
-  width: min(420px, calc(100% - 40px));
+  width: min(420px, 100%);
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  border-radius: 0;
+}
+
+.panel-side .app-header {
+  margin-bottom: 0;
 }
 
 .panel-map {
   width: 100%;
-  height: calc(100vh - 116px);
+  height: 100vh;
   min-height: 520px;
   overflow: hidden;
+  border-radius: 0;
 }
 
 /* 입력 폼 */
@@ -453,6 +462,9 @@ input {
     top: auto;
     left: auto;
     width: 100%;
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
     margin-bottom: 20px;
   }
 

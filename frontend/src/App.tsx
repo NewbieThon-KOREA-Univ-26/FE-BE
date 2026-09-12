@@ -30,20 +30,19 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div>
-          <h1>걸을까 탈까</h1>
-          <p>한 정거장 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
-        </div>
-        {IS_MOCK && (
-          <span className="badge" title="VITE_USE_MOCK=true 라서 백엔드 대신 예시 응답을 씁니다">
-            예시 데이터 모드
-          </span>
-        )}
-      </header>
-
       <main className="app-main">
         <section className="panel panel-side">
+          <header className="app-header">
+            <div>
+              <h1>걸을만한데?</h1>
+              <p>한 정거장 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
+            </div>
+            {IS_MOCK && (
+              <span className="badge" title="VITE_USE_MOCK=true 라서 백엔드 대신 예시 응답을 씁니다">
+                예시 데이터 모드
+              </span>
+            )}
+          </header>
           <RouteForm
             start={start}
             end={end}
