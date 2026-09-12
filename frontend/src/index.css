@@ -541,8 +541,34 @@ input {
 }
 
 /* 경로 타임라인은 대중교통 카드 자리(그리드 반 칸)에 들어가면 너무 좁아, 두 칸을 다 씁니다. */
-.compare-grid > .transit-route {
+/* 경로 서랍: 두 카드 아래 전체 폭. 닫혀 있으면 높이 0 + 그리드 간격만큼 당겨 빈 줄이 남지 않습니다. */
+.compare-grid > .route-drawer {
   grid-column: 1 / -1;
+  /* stretch 정렬이면 닫혔을 때 음수 margin 만큼(10px) 높이가 생깁니다. start 로 두면 정확히 0 입니다. */
+  align-self: start;
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -10px;
+  opacity: 0;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    margin-top 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+.compare-grid > .route-drawer.is-open {
+  grid-template-rows: 1fr;
+  margin-top: 0;
+  opacity: 1;
+}
+
+.route-drawer-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.card-transit.is-open {
+  border-color: var(--transit);
 }
 
 .compare-card.is-clickable,
@@ -560,6 +586,29 @@ input {
   outline: none;
   transform: translateY(-1px);
 }
+
+.brand-link {
+  display: inline-block;
+  line-height: 0;
+  border-radius: 8px;
+}
+
+.brand-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.app-crash {
+  max-width: 480px;
+  margin: 15vh auto 0;
+  padding: 0 var(--pad, 20px);
+  text-align: center;
+}
+
+.app-crash h1 { font-size: 20px; margin: 0 0 8px; }
+.app-crash p { color: var(--muted); margin: 0 0 8px; }
+.app-crash .error-code { font-family: ui-monospace, monospace; font-size: 12px; }
+.app-crash button { margin-top: 12px; }
 
 .transit-card-hint {
   display: block;
@@ -1442,6 +1491,8 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .compare-grid > .route-drawer { transition: none; }
+
   *,
   *::before,
   *::after {

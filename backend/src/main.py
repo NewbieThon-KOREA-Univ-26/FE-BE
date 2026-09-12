@@ -111,12 +111,13 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
         # 값이 아니라 이름만 담습니다.
         received = ', '.join(sorted(request.query_params)) or '없음'
         missing = [str(error.get('loc', ('?',))[-1]) for error in exc.errors()]
-        return JSONResponse(status_code=400, content={'error': {
-            'code': 'INVALID_INPUT',
-            'message': ('유효한 출발지·도착지 경도와 위도를 입력하세요 '
-                        f'(받은 경로: {request.url.path} / 받은 항목: {received} / '
-                        f'문제 항목: {", ".join(missing) or "없음"})'),
-        }})
+        problem = ", ".join(missing) or "없음"
+        if request.url.path.startswith('/api/compare'):
+            message = ('유효한 출발지·도착지 경도와 위도를 입력하세요 '
+                       f'(받은 경로: {request.url.path} / 받은 항목: {received} / 문제 항목: {problem})')
+        else:
+            message = f'요청 형식이 올바르지 않습니다 (문제 항목: {problem})'
+        return JSONResponse(status_code=400, content={'error': {'code': 'INVALID_INPUT', 'message': message}})
 
     @app.exception_handler(Exception)
     async def unexpected_error_handler(request: Request, exc: Exception):
