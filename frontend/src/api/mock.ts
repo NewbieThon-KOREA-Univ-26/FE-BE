@@ -71,7 +71,7 @@ export async function mockCompare(start: Coordinate, end: Coordinate): Promise<C
       duration: walkDuration,
       calories: Math.round(walkDistance * KCAL_PER_METER),
       paths: [fakePath(start, end, 0.08)],
-      geometryWarning: '예시 데이터의 경로 선은 실제 경로가 아닙니다.',
+      geometryWarning: null,
     },
     transit: {
       duration: transitDuration,
