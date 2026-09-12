@@ -18,6 +18,11 @@ const GUIDES: Record<string, Guide> = {
   NO_ROUTE: { title: '경로를 찾을 수 없습니다', hint: '출발지나 도착지를 바꿔서 다시 시도해 보세요', retry: true },
   UPSTREAM_ERROR: { title: '경로 정보를 가져오지 못했습니다', retry: true },
   RATE_LIMITED: { title: '요청이 너무 많습니다', hint: '잠시 후 다시 시도해 주세요', retry: true },
+  SERVICE_NOT_CONFIGURED: {
+    title: '서버에 경로 API 키가 없습니다',
+    hint: '백엔드 .env 의 ODSAY_API_KEY 를 채우고 서버를 다시 시작하세요. 키가 없으면 예시 데이터 모드로 화면을 볼 수 있습니다',
+    retry: false,
+  },
   NETWORK_ERROR: {
     title: '서버에 연결할 수 없습니다',
     hint: '백엔드가 실행 중인지 확인하세요. 백엔드 없이 개발하려면 .env 에 VITE_USE_MOCK=true 를 넣으세요',

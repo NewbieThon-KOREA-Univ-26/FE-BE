@@ -5,13 +5,17 @@ import { formatDistance, formatMinutes, formatWon } from '../utils/format'
 interface Props {
   data: CompareResponse
   onReset: () => void
+  /** F9 — 걷기를 선택했을 때. 절감액을 누적하고 팝업을 띄웁니다. */
+  onWalkChosen: () => void
+  /** 이번 결과로 이미 적립했는지 */
+  rewarded: boolean
 }
 
 /**
  * 2. 비교 결과 화면 (핵심 화면, F5).
  * 가장 크게: 걸으면 아끼는 돈 / 나란히: 걷기 vs 대중교통 / 한 줄 결론: recommendation.reason 그대로.
  */
-export function ResultPanel({ data, onReset }: Props) {
+export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [searchHidden, setSearchHidden] = useState(false)
   const [dragOffset, setDragOffset] = useState(0)
@@ -179,9 +183,21 @@ export function ResultPanel({ data, onReset }: Props) {
         </article>
       </div>
 
-      <button type="button" className="secondary" onClick={onReset}>
-        다시 검색
-      </button>
+      <div className="result-actions">
+        {savings.amount > 0 && (
+          <button
+            type="button"
+            className={`primary walk-choice ${rewarded ? 'is-done' : ''}`}
+            onClick={onWalkChosen}
+            disabled={rewarded}
+          >
+            {rewarded ? '적립했어요' : `🚶 걸어갈래요 (+${formatWon(savings.amount)})`}
+          </button>
+        )}
+        <button type="button" className="secondary" onClick={onReset}>
+          다시 검색
+        </button>
+      </div>
     </section>
   )
 }
