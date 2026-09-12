@@ -14,6 +14,7 @@ export interface KakaoLatLngBounds {
 
 export interface KakaoMap {
   setCenter(latlng: KakaoLatLng): void
+  panBy(dx: number, dy: number): void
   setBounds(bounds: KakaoLatLngBounds, paddingTop?: number, paddingRight?: number, paddingBottom?: number, paddingLeft?: number): void
   setLevel(level: number): void
 }

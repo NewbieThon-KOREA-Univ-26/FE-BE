@@ -87,8 +87,22 @@ input {
 }
 
 @media (max-width: 860px) {
+  html,
+  body,
+  * {
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
   .app-main {
-    min-height: 0;
+    min-height: 100vh;
   }
 }
 
@@ -117,6 +131,12 @@ input {
 
 .panel-side .app-header {
   margin-bottom: 0;
+}
+
+.search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .panel-map {
@@ -299,6 +319,7 @@ input {
   border-radius: var(--radius);
   text-align: center;
   background: var(--walk-soft);
+  cursor: pointer;
 }
 
 .result-transit .result-hero {
@@ -327,6 +348,10 @@ input {
 .result-sub {
   margin: 2px 0 0;
   color: var(--muted);
+}
+
+.result-expand-hint {
+  display: none;
 }
 
 .result-conclusion {
@@ -458,19 +483,122 @@ input {
 
 @media (max-width: 860px) {
   .panel-side {
-    position: relative;
+    position: absolute;
     top: auto;
-    left: auto;
-    width: 100%;
-    height: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    height: 100vh;
     max-height: none;
-    overflow-y: visible;
-    margin-bottom: 20px;
+    overflow: visible;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    pointer-events: none;
+  }
+
+  .search-panel {
+    position: absolute;
+    z-index: 3;
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    max-height: 45vh;
+    overflow-y: auto;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    pointer-events: auto;
+  }
+
+  .search-panel .route-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .search-panel .route-form:has(input:focus) {
+    grid-template-columns: 1fr;
+  }
+
+  .search-panel .route-form.is-loading {
+    grid-template-columns: 1fr;
+  }
+
+  .search-panel .route-form .field,
+  .search-panel .route-form .form-tools,
+  .search-panel .route-form > .hint,
+  .search-panel .route-form > .primary {
+    min-width: 0;
+  }
+
+  .search-panel .route-form .form-tools,
+  .search-panel .route-form > .hint,
+  .search-panel .route-form > .primary {
+    grid-column: 1 / -1;
+  }
+
+  .panel-side .result {
+    position: absolute;
+    z-index: 3;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    max-height: 42vh;
+    overflow-y: auto;
+    margin: 0;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    pointer-events: auto;
+  }
+
+  .panel-side .result:not(.is-expanded) .compare-grid,
+  .panel-side .result:not(.is-expanded) > .secondary,
+  .panel-side .result:not(.is-expanded) .result-conclusion {
+    display: none;
+  }
+
+  .panel-side .result:not(.is-expanded) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .panel-side .result:not(.is-expanded) .result-expand-hint {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .panel-side .result.is-expanded {
+    position: fixed;
+    z-index: 10;
+    inset: 0;
+    max-height: none;
+    overflow-y: auto;
+    border-radius: 0;
+    padding: 20px 16px;
+  }
+
+  .panel-side .result.is-expanded .result-expand-hint {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 11px;
   }
 
   .panel-map,
   .map {
-    height: 65vh;
+    height: 100vh;
     min-height: 420px;
   }
 }

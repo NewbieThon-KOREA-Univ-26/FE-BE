@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { IS_MOCK } from './api/compare'
 import { ErrorBanner } from './components/ErrorBanner'
 import { MapPanel } from './components/MapPanel'
 import { ResultPanel } from './components/ResultPanel'
@@ -32,25 +31,22 @@ export default function App() {
     <div className="app">
       <main className="app-main">
         <section className="panel panel-side">
-          <header className="app-header">
-            <div>
-              <h1>걸을만한데?</h1>
-              <p>한 정거장 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
-            </div>
-            {IS_MOCK && (
-              <span className="badge" title="VITE_USE_MOCK=true 라서 백엔드 대신 예시 응답을 씁니다">
-                예시 데이터 모드
-              </span>
-            )}
-          </header>
-          <RouteForm
-            start={start}
-            end={end}
-            onStartChange={setStart}
-            onEndChange={setEnd}
-            onSubmit={compare}
-            loading={state.status === 'loading'}
-          />
+          <div className="search-panel">
+            <header className="app-header">
+              <div>
+                <h1>걸을만한데?</h1>
+                <p>한 정거장 거리, 걸으면 얼마를 아끼는지 바로 알려드립니다.</p>
+              </div>
+            </header>
+            <RouteForm
+              start={start}
+              end={end}
+              onStartChange={setStart}
+              onEndChange={setEnd}
+              onSubmit={compare}
+              loading={state.status === 'loading'}
+            />
+          </div>
           {state.status === 'loading' && (
             <p className="status" aria-live="polite">
               도보와 대중교통 경로를 비교하는 중…

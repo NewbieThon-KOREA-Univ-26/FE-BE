@@ -1,4 +1,5 @@
 import type { CompareResponse } from '../types/api'
+import { useState } from 'react'
 import { formatDistance, formatMinutes, formatWon } from '../utils/format'
 
 interface Props {
@@ -11,15 +12,29 @@ interface Props {
  * 가장 크게: 걸으면 아끼는 돈 / 나란히: 걷기 vs 대중교통 / 한 줄 결론: recommendation.reason 그대로.
  */
 export function ResultPanel({ data, onReset }: Props) {
+  const [expanded, setExpanded] = useState(false)
   const { walk, transit, savings, recommendation } = data
   const walkRecommended = recommendation.choice === 'walk'
 
   return (
-    <section className={`result ${walkRecommended ? 'result-walk' : 'result-transit'}`} aria-live="polite">
-      <div className="result-hero">
+    <section className={`result ${walkRecommended ? 'result-walk' : 'result-transit'} ${expanded ? 'is-expanded' : ''}`} aria-live="polite">
+      <div
+        className="result-hero"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setExpanded((value) => !value)
+          }
+        }}
+      >
         <p className="result-label">{walkRecommended ? '걸으면 아끼는 돈' : '걸으면 아끼지만'}</p>
         <p className="result-amount">{formatWon(savings.amount)}</p>
         <p className="result-sub">{formatMinutes(savings.extraMinutes)} 더 걸림</p>
+        <small className="result-expand-hint">{expanded ? '터치하면 요약으로 돌아가기' : '터치하면 상세 정보 보기'}</small>
       </div>
 
       <p className="result-conclusion">
