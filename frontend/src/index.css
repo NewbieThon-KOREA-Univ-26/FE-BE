@@ -390,6 +390,41 @@ input {
   color: var(--muted);
 }
 
+.brand-logo {
+  display: block;
+  width: min(100%, 300px);
+  height: 88px;
+  object-fit: cover;
+  object-position: center 52%;
+  transform: translateX(-42px) scale(1.02);
+  transform-origin: center;
+  margin: -6px 0 4px;
+}
+
+.weather-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f7fa;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.weather-summary img,
+.weather-emoji {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  object-fit: contain;
+  font-size: 24px;
+  line-height: 28px;
+}
+
+.weather-summary strong { color: var(--text); }
+.weather-summary small { margin-left: auto; }
+
 .compare-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -642,7 +677,8 @@ input {
 
   .panel-side .result:not(.is-expanded) .compare-grid,
   .panel-side .result:not(.is-expanded) > .secondary,
-  .panel-side .result:not(.is-expanded) .result-conclusion {
+  .panel-side .result:not(.is-expanded) .result-conclusion,
+  .panel-side .result:not(.is-expanded) .weather-summary {
     display: none;
   }
 
