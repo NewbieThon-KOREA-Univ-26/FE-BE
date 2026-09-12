@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import hmac
+import math
 from typing import Annotated
 
 import httpx
@@ -73,8 +74,15 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
+        # 어떤 항목이 실제로 도착했는지 함께 알려 줍니다.
+        # 배포 환경에서 쿼리스트링이 전달되지 않는 경우를 바로 구분하기 위해서입니다.
+        # 값이 아니라 이름만 담습니다.
+        received = ', '.join(sorted(request.query_params)) or '없음'
+        missing = [str(error.get('loc', ('?',))[-1]) for error in exc.errors()]
         return JSONResponse(status_code=400, content={'error': {
-            'code': 'INVALID_INPUT', 'message': '유효한 출발지·도착지 경도와 위도를 입력하세요',
+            'code': 'INVALID_INPUT',
+            'message': ('유효한 출발지·도착지 경도와 위도를 입력하세요 '
+                        f'(받은 항목: {received} / 문제 항목: {", ".join(missing) or "없음"})'),
         }})
 
     @app.exception_handler(Exception)
@@ -144,14 +152,42 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
         response.delete_cookie(SESSION_COOKIE, path='/')
         return response
 
+    async def run_compare(request: Request, sx: float, sy: float, ex: float, ey: float):
+        if (sx, sy) == (ex, ey):
+            raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
+        return await service(request.app, 'router').compare(sx, sy, ex, ey)
+
     # path 나 calories 처럼 값이 없는 선택 필드는 응답에서 아예 빼서
     # 명세서의 "구현 시에만 내려옵니다" 규칙을 지킵니다.
     @app.get('/api/compare', response_model=CompareResponse, response_model_exclude_none=True)
     async def compare(request: Request, startX: Longitude, startY: Latitude,
                       endX: Longitude, endY: Latitude):
-        if (startX, startY) == (endX, endY):
-            raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
-        return await service(request.app, 'router').compare(startX, startY, endX, endY)
+        return await run_compare(request, startX, startY, endX, endY)
+
+    def parse_pair(raw: str, label: str) -> tuple[float, float]:
+        """'경도,위도' 문자열을 좌표로 바꿉니다."""
+        parts = raw.split(',')
+        if len(parts) != 2:
+            raise ApiError(400, 'INVALID_INPUT', f'{label} 는 "경도,위도" 형식이어야 합니다')
+        try:
+            x, y = float(parts[0]), float(parts[1])
+        except ValueError:
+            raise ApiError(400, 'INVALID_INPUT', f'{label} 의 좌표를 숫자로 읽을 수 없습니다') from None
+        if not (math.isfinite(x) and math.isfinite(y)) or abs(x) > 180 or abs(y) > 90:
+            raise ApiError(400, 'INVALID_INPUT', f'{label} 좌표가 범위를 벗어났습니다')
+        return x, y
+
+    # 같은 비교를 경로(path)로도 받습니다.
+    #
+    # 배포 환경의 프록시가 쿼리스트링을 넘기지 않는 경우가 있어, 좌표를 경로에 실으면
+    # 그 영향을 받지 않습니다. 프론트는 이쪽을 먼저 부르고 실패하면 쿼리 방식으로 돌아갑니다.
+    #     GET /api/compare/127.0276,37.4979/127.04,37.51
+    @app.get('/api/compare/{start}/{end}', response_model=CompareResponse,
+             response_model_exclude_none=True)
+    async def compare_by_path(request: Request, start: str, end: str):
+        sx, sy = parse_pair(start, '출발지')
+        ex, ey = parse_pair(end, '도착지')
+        return await run_compare(request, sx, sy, ex, ey)
 
     return app
 

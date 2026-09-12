@@ -30,10 +30,11 @@ export async function getJson<T>(
   for (const [key, value] of Object.entries(params)) {
     query.set(key, String(value))
   }
+  const url = query.size > 0 ? `${path}?${query}` : path
 
   let response: Response
   try {
-    response = await fetch(`${path}?${query.toString()}`, {
+    response = await fetch(url, {
       headers: { Accept: 'application/json' },
     })
   } catch {

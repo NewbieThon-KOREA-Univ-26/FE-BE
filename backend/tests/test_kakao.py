@@ -185,3 +185,38 @@ class ServerlessTests(KakaoTests):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json()['error']['code'], 'INTERNAL_ERROR')
         self.assertNotIn('kakao-key', response.text)
+
+
+class PathParameterTests(KakaoTests):
+    """좌표를 경로로 받는 방식.
+
+    배포 프록시가 쿼리스트링을 넘기지 않는 경우가 있어 추가한 경로입니다.
+    """
+
+    def test_path_form_returns_the_same_result_as_query_form(self):
+        with self.client() as client:
+            by_query = client.get('/api/compare', params=PARAMS).json()
+            by_path = client.get('/api/compare/127.0276,37.4979/127.04,37.51').json()
+        self.assertEqual(by_query, by_path)
+
+    def test_same_location_is_rejected(self):
+        with self.client() as client:
+            body = client.get('/api/compare/127.0,37.5/127.0,37.5').json()
+        self.assertEqual(body['error']['code'], 'SAME_LOCATION')
+
+    def test_malformed_and_out_of_range_pairs(self):
+        with self.client() as client:
+            for path in ('/api/compare/abc/127.0,37.5',
+                         '/api/compare/127.0/127.0,37.5',
+                         '/api/compare/999,37.5/127.0,37.5',
+                         '/api/compare/127.0,99/127.0,37.5'):
+                response = client.get(path)
+                self.assertEqual(response.status_code, 400, path)
+                self.assertEqual(response.json()['error']['code'], 'INVALID_INPUT', path)
+        self.assertEqual(self.calls, [])
+
+    def test_validation_error_names_what_arrived(self):
+        # 쿼리스트링이 통째로 사라지는 상황을 바로 알아볼 수 있어야 합니다.
+        with self.client() as client:
+            body = client.get('/api/compare').json()
+        self.assertIn('받은 항목: 없음', body['error']['message'])
