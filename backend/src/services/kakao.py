@@ -32,7 +32,6 @@ from src.services.compare import (
     Walk,
     gather_and_compare,
     no_route,
-    upstream_error,
 )
 
 KAKAO_HOST = 'https://dapi.kakao.com'
@@ -48,6 +47,12 @@ POINTS_KEYS = ('points', 'vertexes', 'vertices', 'graphPos', 'coordinates', 'pol
 
 # 초 단위로 오는 값을 분으로 바꿀 기준. 이 값보다 크면 초로 봅니다.
 SECONDS_THRESHOLD = 600
+
+# 상태 코드만 보고 바로 손댈 수 있는 원인. 메시지 끝에 붙습니다.
+STATUS_HINTS = {
+    404: ' — 엔드포인트 경로가 다를 수 있습니다. KAKAO_WALK_PATH / KAKAO_TRANSIT_PATH 환경변수로 바꿀 수 있습니다',
+    400: ' — 요청 파라미터 이름이 다를 수 있습니다',
+}
 
 
 def pick(source: Any, keys: tuple[str, ...]) -> Any:
@@ -135,7 +140,12 @@ class KakaoRouting:
     def __init__(self, client: httpx.AsyncClient, settings: Settings):
         self.client, self.settings = client, settings
 
-    async def request(self, path: str, params: dict) -> dict:
+    async def request(self, what: str, path: str, params: dict) -> dict:
+        """카카오 REST 를 부르고 본문(dict)을 돌려줍니다.
+
+        실패하면 원인을 한 줄로 알 수 있게 상태 코드와 어느 조회(도보·대중교통)인지 담습니다.
+        업스트림 본문·URL 은 그대로 노출하지 않습니다. 상태 코드와 숫자 코드만 담습니다.
+        """
         key = self.settings.kakao_rest_api_key.get_secret_value()
         if not key:
             raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
@@ -147,25 +157,41 @@ class KakaoRouting:
                 headers={'Authorization': f'KakaoAK {key}'},
                 timeout=self.settings.upstream_timeout_seconds,
             )
-            if response.status_code == 401 or response.status_code == 403:
-                raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
-                               '카카오 REST API 키 인증에 실패했습니다. 키와 카카오맵 사용 설정을 확인하세요')
-            if response.status_code == 429:
-                raise ApiError(429, 'RATE_LIMITED', '호출 한도를 초과했습니다. 잠시 후 다시 시도하세요')
-            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise ApiError(502, 'UPSTREAM_ERROR',
+                           f'카카오 {what} 경로 조회 응답 시간이 초과되었습니다. 다시 시도해 주세요') from exc
+        except httpx.HTTPError as exc:
+            raise ApiError(502, 'UPSTREAM_ERROR',
+                           f'카카오 {what} 경로 조회 서비스에 연결하지 못했습니다') from exc
+
+        status = response.status_code
+        if status in (401, 403):
+            raise ApiError(503, 'SERVICE_NOT_CONFIGURED',
+                           '카카오 REST API 키 인증에 실패했습니다. 키와 카카오맵 사용 설정을 확인하세요')
+        if status == 429:
+            raise ApiError(429, 'RATE_LIMITED', '호출 한도를 초과했습니다. 잠시 후 다시 시도하세요')
+        if status >= 400:
+            raise ApiError(502, 'UPSTREAM_ERROR',
+                           f'카카오 {what} 경로 조회가 실패했습니다 (카카오 응답 상태: {status}'
+                           f'{STATUS_HINTS.get(status, "")})')
+        try:
             data = response.json()
-            if not isinstance(data, dict):
-                raise upstream_error()
-            # 카카오는 오류를 본문에 담아 200 으로 주기도 합니다.
-            if 'errorType' in data or ('code' in data and pick(data, ROUTES_KEYS) is None):
-                raise no_route()
-            return data
-        except (httpx.HTTPError, ValueError) as exc:
-            # 업스트림 URL·메시지에는 키가 섞일 수 있으므로 그대로 노출하지 않습니다.
-            raise upstream_error() from exc
+        except ValueError as exc:
+            raise ApiError(502, 'UPSTREAM_ERROR',
+                           f'카카오 {what} 경로 조회 응답을 JSON 으로 읽지 못했습니다 (상태: {status})') from exc
+        if not isinstance(data, dict):
+            raise ApiError(502, 'UPSTREAM_ERROR',
+                           f'카카오 {what} 경로 조회 응답 형식이 예상과 다릅니다 ({type(data).__name__})')
+        # 카카오는 오류를 본문에 담아 200 으로 주기도 합니다. 숫자 코드만 메시지에 담습니다.
+        if 'errorType' in data or ('code' in data and pick(data, ROUTES_KEYS) is None):
+            code = data.get('code', data.get('errorType'))
+            shown = code if isinstance(code, (int, float)) else str(code)[:40]
+            raise ApiError(404, 'NO_ROUTE',
+                           f'비교할 {what} 경로를 찾을 수 없습니다 (카카오 응답 코드: {shown})')
+        return data
 
     async def transit(self, sx, sy, ex, ey) -> Transit:
-        data = await self.request(self.settings.kakao_transit_path,
+        data = await self.request('대중교통', self.settings.kakao_transit_path,
                                   {'sx': sx, 'sy': sy, 'ex': ex, 'ey': ey})
         route = first_route(data)
         if route is None:
@@ -184,7 +210,7 @@ class KakaoRouting:
         )
 
     async def walk(self, sx, sy, ex, ey) -> Walk:
-        data = await self.request(self.settings.kakao_walk_path,
+        data = await self.request('도보', self.settings.kakao_walk_path,
                                   {'sx': sx, 'sy': sy, 'ex': ex, 'ey': ey})
         route = first_route(data)
         if route is None:

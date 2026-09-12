@@ -111,6 +111,39 @@ class KakaoTests(unittest.TestCase):
             self.assertEqual(client.get('/api/compare', params=PARAMS).json()['error']['code'],
                              'RATE_LIMITED')
 
+    def test_upstream_http_error_reports_status_and_which_call(self):
+        # 엔드포인트 경로가 틀리면 카카오가 404 를 줍니다. 상태 코드와 어느 조회인지 담아
+        # 화면 메시지만 보고도 원인을 알 수 있게 합니다. 업스트림 본문은 노출하지 않습니다.
+        self.failure = lambda req: httpx.Response(404, text='upstream-body-not-for-users')
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        message = response.json()['error']['message']
+        self.assertEqual(response.json()['error']['code'], 'UPSTREAM_ERROR')
+        self.assertIn('404', message)
+        self.assertIn('도보', message)
+        self.assertIn('KAKAO_WALK_PATH', message)
+        self.assertNotIn('upstream-body-not-for-users', message)
+
+    def test_body_error_code_is_reported_without_upstream_message(self):
+        # 카카오는 오류를 200 본문의 code 로 주기도 합니다. 숫자 코드만 담고 msg 는 숨깁니다.
+        self.failure = lambda req: httpx.Response(200, json={'code': -10, 'msg': 'hidden-upstream-text'})
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 404)
+        message = response.json()['error']['message']
+        self.assertEqual(response.json()['error']['code'], 'NO_ROUTE')
+        self.assertIn('-10', message)
+        self.assertNotIn('hidden-upstream-text', message)
+
+    def test_non_json_body_is_reported_with_status(self):
+        self.failure = lambda req: httpx.Response(200, text='<html>not json</html>')
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        self.assertIn('JSON', response.json()['error']['message'])
+        self.assertNotIn('html', response.json()['error']['message'])
+
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
         self.transit = {'routes': [{'somethingElse': 1}]}
