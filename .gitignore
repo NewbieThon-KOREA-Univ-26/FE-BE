@@ -1,0 +1,48 @@
+# 의존성
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# 빌드 결과물 및 캐시
+dist/
+build/
+.next/
+out/
+.nuxt/
+.output/
+.vite/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# 환경변수 및 비밀값
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# 로그
+logs/
+*.log
+
+# 테스트 결과
+coverage/
+playwright-report/
+test-results/
+
+# 로컬 편집기 설정
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# 운영체제 파일
+.DS_Store
+Thumbs.db
+
+# 임시 파일
+*.tmp
+*.swp
