@@ -1,0 +1,150 @@
+"""카카오맵 REST 제공자 테스트.
+
+실제 응답 형식을 문서로 확인하지 못해, 여기 픽스처는 "이런 모양이면 이렇게 읽는다"
+를 고정하는 용도입니다. 진짜 응답을 받아 보고 형식이 다르면
+src/services/kakao.py 의 *_KEYS 목록과 이 픽스처를 함께 고치세요.
+"""
+
+import copy
+import unittest
+
+import httpx
+from fastapi.testclient import TestClient
+
+from src.config.settings import Settings
+from src.main import create_app
+
+PARAMS = dict(startX=127.0276, startY=37.4979, endX=127.04, endY=37.51)
+
+
+def transit_route(minutes=10, fare=1400):
+    return {'routes': [{
+        'duration': minutes, 'fare': fare, 'transfers': 1,
+        'totalWalk': 320, 'totalWalkTime': 5,
+        'sections': [
+            {'points': [{'x': 127.0276, 'y': 37.4979}, {'x': 127.03, 'y': 37.50}]},
+            {'points': [{'x': 127.035, 'y': 37.505}, {'x': 127.04, 'y': 37.51}]},
+        ],
+    }]}
+
+
+def walk_route(distance=1180, minutes=16):
+    return {'routes': [{
+        'distance': distance, 'duration': minutes,
+        'sections': [{'points': [{'x': 127.0276, 'y': 37.4979}, {'x': 127.04, 'y': 37.51}]}],
+    }]}
+
+
+class KakaoTests(unittest.TestCase):
+    def setUp(self):
+        self.walk = walk_route()
+        self.transit = transit_route()
+        self.calls = []
+        self.failure = None
+
+    def handler(self, request):
+        self.calls.append(request)
+        if self.failure:
+            return self.failure(request)
+        body = self.walk if 'pedestrian' in request.url.path else self.transit
+        return httpx.Response(200, json=copy.deepcopy(body))
+
+    def client(self, key='kakao-key'):
+        return TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key=key),
+            httpx.MockTransport(self.handler)))
+
+    def test_compare_and_request_contract(self):
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body['walk']['distance'], 1180)
+        self.assertEqual(body['walk']['duration'], 16)
+        self.assertEqual(body['transit'], {
+            'duration': 10, 'fare': 1400, 'transfers': 1,
+            'walkDistance': 320, 'walkDuration': 5,
+            'paths': [
+                [{'x': 127.0276, 'y': 37.4979}, {'x': 127.03, 'y': 37.5}],
+                [{'x': 127.035, 'y': 37.505}, {'x': 127.04, 'y': 37.51}],
+            ],
+        })
+        self.assertEqual(body['savings'], {'amount': 1400, 'extraMinutes': 6})
+        self.assertEqual(body['recommendation']['choice'], 'walk')
+        for request in self.calls:
+            self.assertEqual(request.headers['Authorization'], 'KakaoAK kakao-key')
+            self.assertEqual(request.url.host, 'dapi.kakao.com')
+            self.assertEqual(request.url.params['sx'], '127.0276')
+            self.assertEqual(request.url.params['ey'], '37.51')
+
+    def test_seconds_are_converted_to_minutes(self):
+        # 초로 오는 API 도 있어 큰 값은 초로 보고 분으로 바꿉니다.
+        self.walk = walk_route(minutes=960)
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['walk']['duration'], 16)
+
+    def test_flat_coordinate_array_is_read(self):
+        self.walk['routes'][0]['sections'] = [{'vertexes': [127.0276, 37.4979, 127.04, 37.51]}]
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['walk']['paths'],
+                         [[{'x': 127.0276, 'y': 37.4979}, {'x': 127.04, 'y': 37.51}]])
+
+    def test_missing_key_returns_503_without_calling_kakao(self):
+        with self.client(key='') as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['error']['code'], 'SERVICE_NOT_CONFIGURED')
+        self.assertEqual(self.calls, [])
+
+    def test_rejected_key_is_reported_as_configuration_problem(self):
+        self.failure = lambda req: httpx.Response(401, json={'message': 'unauthorized'})
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()['error']['code'], 'SERVICE_NOT_CONFIGURED')
+
+    def test_rate_limit(self):
+        self.failure = lambda req: httpx.Response(429)
+        with self.client() as client:
+            self.assertEqual(client.get('/api/compare', params=PARAMS).json()['error']['code'],
+                             'RATE_LIMITED')
+
+    def test_unknown_shape_reports_the_keys_it_received(self):
+        # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
+        self.transit = {'routes': [{'somethingElse': 1}]}
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        self.assertIn('받은 항목', response.json()['error']['message'])
+
+    def test_no_route(self):
+        self.transit = {'errorType': 'NO_RESULT', 'message': '경로 없음'}
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()['error']['code'], 'NO_ROUTE')
+
+    def test_key_never_leaks_into_error_messages(self):
+        def timeout(request):
+            raise httpx.ReadTimeout('secret kakao-key', request=request)
+        self.failure = timeout
+        with self.client() as client:
+            response = client.get('/api/compare', params=PARAMS)
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn('kakao-key', response.text)
+
+    def test_endpoint_paths_are_configurable(self):
+        with TestClient(create_app(
+            Settings(_env_file=None, route_provider='kakao', kakao_rest_api_key='k',
+                     kakao_walk_path='/v2/routing/walk', kakao_transit_path='/v2/routing/transit'),
+            httpx.MockTransport(self.handler),
+        )) as client:
+            client.get('/api/compare', params=PARAMS)
+        paths = sorted(request.url.path for request in self.calls)
+        self.assertEqual(paths, ['/v2/routing/transit', '/v2/routing/walk'])
+
+
+if __name__ == '__main__':
+    unittest.main()
