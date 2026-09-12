@@ -237,17 +237,22 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
             <span>{formatMinutes(transit.duration)} · 환승 {transit.transfers}회</span>
           </div>
           {transit.routeSteps?.length ? (
-            <ol className="transit-route-list">
+            <ol className="route-timeline">
               {transit.routeSteps.map((step, index) => (
-                <li key={`${step.mode}-${step.lineName ?? 'route'}-${index}`}>
-                  <span className={`transit-mode transit-mode-${step.mode}`} aria-hidden="true">
-                    {step.mode === 'subway' ? '지하철' : '버스'}
+                <li
+                  key={`${step.mode}-${step.lineName ?? 'route'}-${index}`}
+                  className={`route-leg route-leg-${step.mode}`}
+                  aria-label={`${step.lineName ?? (step.mode === 'subway' ? '지하철' : '버스')}, ${step.fromName ?? '승차 지점'}에서 타고 ${step.toName ?? '하차 지점'}에서 내림`}
+                >
+                  <span className="route-badge" title={step.lineName} aria-hidden="true">
+                    {shortLine(step.lineName, step.mode)}
                   </span>
-                  <div>
-                    <strong>{step.lineName ?? (step.mode === 'subway' ? '지하철' : '버스')}</strong>
-                    {(step.fromName || step.toName) && (
-                      <p>{step.fromName ?? '승차 지점'} <span aria-hidden="true">→</span> {step.toName ?? '하차 지점'}</p>
-                    )}
+                  <div className="route-stops">
+                    <div className="route-stop route-stop-board">
+                      <strong>{step.fromName ?? '승차 지점'}</strong>
+                      {step.direction && <span className="route-dir">{step.direction} 방면</span>}
+                    </div>
+                    <div className="route-stop route-stop-alight">{step.toName ?? '하차 지점'}</div>
                   </div>
                 </li>
               ))}
@@ -288,4 +293,27 @@ export function ResultPanel({ data, onReset, onWalkChosen, rewarded }: Props) {
       </div>
     </section>
   )
+}
+
+/**
+ * 배지에 넣을 짧은 노선 표기. "6호선" → "6", "공항철도" → "공항", "273" → "273".
+ * 길면 앞 세 글자만 씁니다. 전체 이름은 배지의 title 과 aria-label 에 있습니다.
+ */
+function shortLine(name: string | undefined, mode: 'bus' | 'subway'): string {
+  if (!name) {
+    return mode === 'subway' ? '지하철' : '버스'
+  }
+  const trimmed = name.replace(/\s*\(.*\)$/, '').trim()
+  const line = trimmed.match(/^(\d+)호선/)
+  if (line) {
+    return line[1]
+  }
+  if (trimmed.includes('공항')) {
+    return '공항'
+  }
+  const number = trimmed.match(/[A-Za-z가-힣]?\d+[A-Za-z0-9-]*/)
+  if (number && number[0].length <= 5) {
+    return number[0]
+  }
+  return trimmed.slice(0, 3)
 }

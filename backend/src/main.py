@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
 from src.config.settings import Settings
-from src.services.compare import ApiError, CompareResponse, Odsay
+from src.services.compare import ApiError, CompareResponse, Odsay, distance_km
 from src.services.auth import (
     SESSION_COOKIE,
     STATE_COOKIE,
@@ -177,6 +177,11 @@ def create_app(settings: Settings | None = None, transport=None) -> FastAPI:
     async def run_compare(request: Request, sx: float, sy: float, ex: float, ey: float):
         if (sx, sy) == (ex, ey):
             raise ApiError(400, 'SAME_LOCATION', '출발지와 도착지가 같습니다')
+        km = distance_km(sx, sy, ex, ey)
+        if km > settings.max_distance_km:
+            raise ApiError(400, 'TOO_FAR',
+                           f'출발지와 도착지가 약 {km:.0f}km 떨어져 있어요. '
+                           f'{settings.max_distance_km:g}km 이내 구간만 비교할 수 있습니다')
         return await service(request.app, 'router').compare(sx, sy, ex, ey)
 
     @app.get('/api/debug/upstream/{kind}')

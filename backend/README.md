@@ -81,6 +81,9 @@ KAKAO_TRANSIT_QUERY=origin={sx},{sy}&destination={ex},{ey}
 `GET /api/debug/upstream/transit?startX=…&startY=…&endX=…&endY=…` (또는 `walk`) 를 엽니다.
 카카오 원본 응답이 그대로 나옵니다. 확인이 끝나면 끕니다.
 
+출발지·도착지 직선 거리가 `MAX_DISTANCE_KM`(기본 30) 을 넘으면 조회하지 않고 `TOO_FAR`(400) 로 알립니다.
+프론트도 같은 기준으로 요청 전에 막습니다 (`frontend/src/lib/geo.ts`).
+
 오류 메시지에는 요청한 호스트·경로와 카카오 응답 상태 코드가 담기므로,
 경로·파라미터 중 무엇이 틀렸는지 화면에서 바로 알 수 있습니다.
 

@@ -349,6 +349,52 @@ class KakaoTests(unittest.TestCase):
             self.assertNotIn('kakao-key', response.text)
             self.assertEqual(client.get('/api/debug/upstream/car', params=PARAMS).status_code, 404)
 
+    def test_route_steps_from_official_steps(self):
+        # 확인된 guidance 로 역 이름·호선을, vehicles 의 흔한 이름으로 방면을 채웁니다. 걷는 구간은 뺍니다.
+        self.transit = {'status': 'OK', 'routes': [{
+            'properties': {'totalTime': 975, 'transfers': 1, 'fare': {'value': 2250}},
+            'steps': [
+                {'properties': {'type': 'WALK', 'time': 180, 'distance': 240}, 'path': {'points': []}},
+                {'properties': {'type': 'SUBWAY', 'time': 795,
+                                'guidance': '공항철도 (서울역(공항철도) > 김포공항역)',
+                                'vehicles': [{'headsign': '인천공항2터미널'}], 'stops': [{}, {}]},
+                 'path': {'points': []}},
+                {'properties': {'type': 'BUS', 'time': 300, 'guidance': '273 (삼각지역 > 용산역)'},
+                 'path': {'points': []}},
+            ]}]}
+        with self.client() as client:
+            body = client.get('/api/compare', params=PARAMS).json()
+        self.assertEqual(body['transit']['routeSteps'], [
+            {'mode': 'subway', 'lineName': '공항철도', 'fromName': '서울역(공항철도)',
+             'toName': '김포공항역', 'direction': '인천공항2터미널'},
+            {'mode': 'bus', 'lineName': '273', 'fromName': '삼각지역', 'toName': '용산역'},
+        ])
+
+    def test_route_steps_prefer_stop_names_when_present(self):
+        self.transit = {'status': 'OK', 'routes': [{
+            'properties': {'totalTime': 600, 'transfers': 0, 'fare': {'value': 1400}},
+            'steps': [{'properties': {'type': 'SUBWAY', 'time': 600, 'guidance': '2호선 (강남 > 역삼)',
+                                      'stops': [{'name': '강남역'}, {'name': '교대역'}, {'name': '역삼역'}],
+                                      'vehicles': [{'name': '2호선 내선'}]}, 'path': {'points': []}}]}]}
+        with self.client() as client:
+            steps = client.get('/api/compare', params=PARAMS).json()['transit']['routeSteps']
+        self.assertEqual(steps, [{'mode': 'subway', 'lineName': '2호선 내선', 'fromName': '강남역', 'toName': '역삼역'}])
+
+    def test_too_far_is_rejected_before_calling_kakao(self):
+        far = dict(startX=126.9780, startY=37.5665, endX=129.0756, endY=35.1796)  # 서울시청 → 부산시청
+        with self.client() as client:
+            response = client.get('/api/compare', params=far)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()['error']['code'], 'TOO_FAR')
+        self.assertIn('30km', response.json()['error']['message'])
+        self.assertEqual(self.calls, [])
+
+    def test_distance_just_inside_limit_is_allowed(self):
+        near = dict(startX=127.0, startY=37.5, endX=127.0, endY=37.5 + 29 / 111.0)  # 북쪽으로 약 29km
+        with self.client() as client:
+            self.assertEqual(client.get('/api/compare', params=near).status_code, 200)
+        self.assertEqual(len(self.calls), 2)
+
     def test_unknown_shape_reports_the_keys_it_received(self):
         # 형식이 다르면 어떤 이름으로 왔는지 메시지에 담아 고치기 쉽게 합니다.
         self.transit = {'routes': [{'somethingElse': 1}]}

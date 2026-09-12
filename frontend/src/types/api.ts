@@ -29,6 +29,8 @@ export interface TransitRouteStep {
   lineName?: string
   fromName?: string
   toName?: string
+  /** '인천공항2터미널' 처럼 타는 방향. 화면에서는 뒤에 "방면"을 붙입니다. */
+  direction?: string
 }
 
 export interface TransitInfo {
@@ -86,6 +88,7 @@ export interface CompareResponse {
 export type ApiErrorCode =
   | 'INVALID_INPUT'
   | 'SAME_LOCATION'
+  | 'TOO_FAR'
   | 'NO_ROUTE'
   | 'UPSTREAM_ERROR'
   | 'RATE_LIMITED'

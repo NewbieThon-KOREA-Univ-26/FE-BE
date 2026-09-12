@@ -30,6 +30,7 @@ from src.services.compare import (
     CompareResponse,
     Point,
     Transit,
+    TransitRouteStep,
     Walk,
     gather_and_compare,
     no_route,
@@ -281,6 +282,59 @@ def no_route_in(what: str, data: Any) -> ApiError:
                     f'비교할 {what} 경로를 찾을 수 없습니다 (구조: {outline(data)[:900]})')
 
 
+RAIL_WORDS = ('SUBWAY', 'TRAIN', 'RAIL', 'TRAM')
+
+
+def parse_guidance(text: str) -> tuple[str | None, str | None, str | None]:
+    """'6호선 (안암(고대병원앞) > 삼각지(전쟁기념관))' → ('6호선', '안암(고대병원앞)', '삼각지(전쟁기념관)')"""
+    head, sep, rest = text.partition(' (')
+    if not sep:
+        return (head.strip() or None, None, None)
+    if rest.endswith(')'):
+        rest = rest[:-1]
+    start, arrow, end = rest.partition(' > ')
+    return (head.strip() or None, start.strip() or None, (end.strip() or None) if arrow else None)
+
+
+def text_of(item: Any, keys: tuple[str, ...]) -> str | None:
+    """항목(또는 그 properties)에서 첫 문자열 값을 꺼냅니다."""
+    holder = item.get('properties') if isinstance(item, dict) and isinstance(item.get('properties'), dict) else item
+    value = pick(holder, keys)
+    return str(value).strip() or None if value not in (None, '') else None
+
+
+def route_step(step: dict) -> TransitRouteStep | None:
+    """탑승 step 하나를 승차·하차 안내로 바꿉니다. 걷는 구간이면 None.
+
+    stops·vehicles 안의 항목 이름은 아직 확인되지 않아 흔한 이름을 시도하고,
+    없으면 확인된 guidance 문자열('6호선 (안암 > 삼각지)')을 잘라 씁니다.
+    """
+    props = step.get('properties') if isinstance(step.get('properties'), dict) else step
+    kind = str(props.get('type') or '').upper()
+    if not kind or kind == 'WALK':
+        return None
+    mode = 'subway' if any(word in kind for word in RAIL_WORDS) else 'bus'
+    guide_line, guide_start, guide_end = parse_guidance(str(props.get('guidance') or ''))
+    vehicles = props.get('vehicles') or []
+    vehicle = vehicles[0] if isinstance(vehicles, list) and vehicles else (vehicles if isinstance(vehicles, dict) else {})
+    line = text_of(vehicle, ('name', 'lineName', 'line', 'no', 'number', 'busNo', 'routeName'))
+    direction = text_of(vehicle, ('headsign', 'direction', 'destination', 'toward', 'bound', 'terminal', 'lastStop'))
+    stops = props.get('stops') or []
+    names = [text_of(stop, ('name', 'stopName', 'stationName', 'title')) for stop in stops] if isinstance(stops, list) else []
+    names = [name for name in names if name]
+    start, end = (names[0], names[-1]) if len(names) >= 2 else (None, None)
+    return TransitRouteStep(mode=mode, lineName=line or guide_line,
+                            fromName=start or guide_start, toName=end or guide_end,
+                            direction=direction)
+
+
+def route_steps(steps: Any) -> list[TransitRouteStep] | None:
+    if not isinstance(steps, list):
+        return None
+    guides = [guide for guide in (route_step(step) for step in steps if isinstance(step, dict)) if guide]
+    return guides or None
+
+
 class KakaoRouting:
     """도보·대중교통 경로를 카카오맵 REST API 에서 가져옵니다."""
 
@@ -382,6 +436,7 @@ class KakaoRouting:
             duration=duration, fare=int(fare), transfers=int(max(0, transfers)),
             walkDistance=max(0.0, walk_distance), walkDuration=max(0.0, walk_duration),
             paths=parse_paths(route),
+            routeSteps=route_steps(route.get('steps')) if isinstance(route, dict) else None,
         )
 
     async def walk(self, sx, sy, ex, ey) -> Walk:
