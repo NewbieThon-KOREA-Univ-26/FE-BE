@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { hasKakaoKey, searchPlaces } from '../lib/kakao'
 import type { Place } from '../types/place'
 
@@ -24,7 +24,8 @@ function KakaoPlaceInput({ id, label, value, onChange, placeholder }: Props) {
   const [results, setResults] = useState<Place[]>([])
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const latestKeyword = useRef('')
+  const [searching, setSearching] = useState(false)
+  const [searched, setSearched] = useState(false)
 
   // 현재 위치 버튼 등 바깥에서 값이 바뀌면 입력칸 글자도 맞춥니다.
   useEffect(() => {
@@ -35,26 +36,37 @@ function KakaoPlaceInput({ id, label, value, onChange, placeholder }: Props) {
 
   useEffect(() => {
     const keyword = query.trim()
-    latestKeyword.current = keyword
+    let cancelled = false
+    setResults([])
+    setError(null)
+    setSearched(false)
+    setSearching(false)
     if (!open || keyword.length < 2 || keyword === value?.name) {
       setResults([])
       return
     }
+    setSearching(true)
     const timer = setTimeout(() => {
       searchPlaces(keyword)
         .then((places) => {
-          if (latestKeyword.current === keyword) {
+          if (!cancelled) {
             setResults(places.slice(0, 8))
             setError(null)
+            setSearched(true)
+            setSearching(false)
           }
         })
         .catch((cause: Error) => {
-          if (latestKeyword.current === keyword) {
+          if (!cancelled) {
             setError(cause.message)
+            setSearching(false)
           }
         })
     }, 300)
-    return () => clearTimeout(timer)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [query, open, value])
 
   const select = (place: Place) => {
@@ -104,6 +116,10 @@ function KakaoPlaceInput({ id, label, value, onChange, placeholder }: Props) {
         )}
       </div>
       {value?.address && <small className="hint">{value.address}</small>}
+      {open && searching && <small className="hint" role="status">장소를 검색하고 있어요…</small>}
+      {open && searched && results.length === 0 && (
+        <small className="hint" role="status">검색 결과가 없습니다. 다른 장소 이름으로 검색해 주세요.</small>
+      )}
       {error && <small className="hint hint-error">{error}</small>}
     </div>
   )

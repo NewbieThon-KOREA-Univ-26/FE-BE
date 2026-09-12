@@ -21,12 +21,15 @@ export function MapPanel({ start, end }: Props) {
   const markersRef = useRef<KakaoMarker[]>([])
   const [status, setStatus] = useState<'idle' | 'ready' | 'error'>('idle')
   const [message, setMessage] = useState<string>('')
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!hasKakaoKey || !containerRef.current) {
       return
     }
     let cancelled = false
+    setStatus('idle')
+    setMessage('')
     loadKakaoSdk()
       .then((kakao) => {
         if (cancelled || !containerRef.current) {
@@ -47,7 +50,7 @@ export function MapPanel({ start, end }: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [attempt])
 
   useEffect(() => {
     const map = mapRef.current
@@ -91,7 +94,12 @@ export function MapPanel({ start, end }: Props) {
     <div className="map">
       <div ref={containerRef} className="map-canvas" />
       {status === 'idle' && <p className="map-overlay">지도를 불러오는 중…</p>}
-      {status === 'error' && <p className="map-overlay map-error">{message}</p>}
+      {status === 'error' && (
+        <div className="map-overlay map-error" role="alert">
+          <p>{message}</p>
+          <button type="button" onClick={() => setAttempt((value) => value + 1)}>지도 다시 불러오기</button>
+        </div>
+      )}
     </div>
   )
 }
