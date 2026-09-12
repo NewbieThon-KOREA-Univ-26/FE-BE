@@ -1,7 +1,7 @@
 import type { KakaoSdk } from '../types/kakao'
 import type { Place } from '../types/place'
 
-const APP_KEY = import.meta.env.VITE_KAKAO_MAP_KEY ?? ''
+const APP_KEY = (import.meta.env.VITE_KAKAO_MAP_KEY ?? '').trim()
 
 /** 카카오 키가 설정되어 있는지. 없으면 장소 검색·지도 대신 좌표 직접 입력으로 동작합니다. */
 export const hasKakaoKey = APP_KEY.length > 0
@@ -26,21 +26,42 @@ export function loadKakaoSdk(): Promise<KakaoSdk> {
 
   loading = new Promise<KakaoSdk>((resolve, reject) => {
     const script = document.createElement('script')
+    let settled = false
+    const fail = (message: string) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timeout)
+      script.onload = null
+      script.onerror = null
+      script.remove()
+      loading = null
+      reject(new Error(message))
+    }
+    const timeout = window.setTimeout(() => {
+      fail('지도 연결 시간이 초과됐습니다. 네트워크와 카카오 JavaScript 키·등록 도메인을 확인하고 다시 시도해 주세요.')
+    }, 15000)
     script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(APP_KEY)}&libraries=services&autoload=false`
     script.async = true
     script.onload = () => {
+      if (settled) return
       const kakao = window.kakao
-      if (!kakao) {
-        loading = null
-        reject(new Error('카카오 지도 SDK 를 불러왔지만 window.kakao 가 없습니다'))
+      if (!kakao?.maps?.load) {
+        fail('카카오 지도를 초기화하지 못했습니다. JavaScript 키와 등록 도메인을 확인해 주세요.')
         return
       }
-      kakao.maps.load(() => resolve(kakao))
+      kakao.maps.load(() => {
+        if (settled) return
+        if (!kakao.maps.services) {
+          fail('카카오 장소 검색 라이브러리를 불러오지 못했습니다.')
+          return
+        }
+        settled = true
+        window.clearTimeout(timeout)
+        resolve(kakao)
+      })
     }
     script.onerror = () => {
-      loading = null
-      script.remove()
-      reject(new Error('카카오 지도 SDK 를 불러오지 못했습니다. 키와 등록된 도메인을 확인하세요'))
+      fail('카카오 지도 SDK 를 불러오지 못했습니다. JavaScript 키와 등록된 도메인을 확인하세요.')
     }
     document.head.appendChild(script)
   })
