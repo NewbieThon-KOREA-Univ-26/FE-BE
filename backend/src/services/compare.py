@@ -336,6 +336,29 @@ class Odsay:
 
 # --- 제공자 공통 -----------------------------------------------------------
 
+def raise_combined(results: dict[str, object]) -> None:
+    """실패가 있으면 두 조회의 결과를 한 메시지에 담아 던집니다.
+
+    도보만 실패했는데 대중교통이 됐는지, 둘 다 실패했는지가 한 번에 보여야
+    한 라운드에 원인을 좁힐 수 있습니다. 상태·코드는 먼저 실패한 쪽을 따릅니다.
+    ApiError 가 아닌 예외는 그대로 올립니다 (500 으로 처리됩니다).
+    """
+    failures = [(name, r) for name, r in results.items() if isinstance(r, Exception)]
+    if not failures:
+        return
+    name, first = failures[0]
+    if not isinstance(first, ApiError):
+        raise first
+    if len(failures) == len(results):
+        others = [f.message for _, f in failures[1:]
+                  if isinstance(f, ApiError) and f.message != first.message]
+        if others:
+            raise ApiError(first.status, first.code, ' / '.join([first.message, *others]))
+        raise first
+    succeeded = '·'.join(n for n in results if n != name)
+    raise ApiError(first.status, first.code, f'{first.message} ({succeeded} 조회는 성공)')
+
+
 async def gather_and_compare(provider, sx, sy, ex, ey) -> CompareResponse:
     """도보와 대중교통을 함께 조회해 비교 결과를 만듭니다.
 
@@ -347,9 +370,7 @@ async def gather_and_compare(provider, sx, sy, ex, ey) -> CompareResponse:
         provider.walk(sx, sy, ex, ey), provider.transit(sx, sy, ex, ey),
         return_exceptions=True,
     )
-    for result in results:
-        if isinstance(result, Exception):
-            raise result
+    raise_combined(dict(zip(('도보', '대중교통'), results)))
     walk, transit = results
     return build_comparison(walk, transit, provider.settings)
 
